@@ -383,8 +383,27 @@ const Nucleo = (() => {
             ]
         };
     }
-    const SUSPENDE = { feriado: true, recesso: true, ponto: true, evento: false };
-    const NOME_TIPO_CAL = { feriado: 'Feriado', recesso: 'Recesso', ponto: 'Ponto facultativo', evento: 'Evento (não suspende aulas)' };
+    const SUSPENDE = { feriado: true, recesso: true, ponto: true, evento: false, curso: true, ausencia: true };
+    const NOME_TIPO_CAL = { feriado: 'Feriado', recesso: 'Recesso', ponto: 'Ponto facultativo', evento: 'Evento (não suspende aulas)', curso: 'Evento do curso', ausencia: 'Ausência do professor' };
+    /** Período (início–fim, AAAA-MM-DD) → lista de datas. */
+    function datasDoPeriodo(inicio, fim) {
+        const r = [];
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio || '')) return r;
+        const f = /^\d{4}-\d{2}-\d{2}$/.test(fim || '') && fim >= inicio ? fim : inicio;
+        for (let dt = dataUTC(inicio); isoDe(dt) <= f; dt.setUTCDate(dt.getUTCDate() + 1)) r.push(isoDe(dt));
+        return r;
+    }
+    /**
+     * Datas do calendário que valem para esta grade: as do calendário acadêmico vigente + os eventos do curso
+     * (config.eventosCurso: semana acadêmica etc.; semAula=false = há aula) + (se dadas) as ausências de um professor.
+     */
+    function eventosDoCalendario(dados, ausencias) {
+        const cal = dados.config.calendario || {};
+        const r = (cal.eventos || []).slice();
+        (dados.config.eventosCurso || []).forEach((e) => datasDoPeriodo(e.inicio, e.fim).forEach((data) => r.push({ data, tipo: e.semAula === false ? 'evento' : 'curso', descricao: e.descricao || 'Evento do curso', ateHora: '' })));
+        (ausencias || []).forEach((e) => datasDoPeriodo(e.inicio, e.fim).forEach((data) => r.push({ data, tipo: 'ausencia', descricao: `${e.motivo || 'Ausência justificada'}`, ateHora: '' })));
+        return r.sort((a, b) => a.data.localeCompare(b.data));
+    }
     const FERIADOS_NOMES = /confraterniza|navegantes|sexta-feira santa|p[áa]scoa|tiradentes|trabalh|corpus christi|independ[êe]ncia|ga[úu]cho|aparecida|finados|proclama|zumbi|consci[êe]ncia negra|natal\b|feriado/i;
 
     /**
@@ -441,7 +460,8 @@ const Nucleo = (() => {
         const cfg = dados.config, idx = indices(dados);
         const ini = dataUTC(sem.inicio), fim = dataUTC(sem.fim);
         const evPorData = {};
-        (cal.eventos || []).forEach((e) => { (evPorData[e.data] = evPorData[e.data] || []).push(e); });
+        const todosEventos = eventosDoCalendario(dados);
+        todosEventos.forEach((e) => { (evPorData[e.data] = evPorData[e.data] || []).push(e); });
         const porDia = cfg.dias.map((nome) => ({ dia: nome, total: 0, perdidos: 0, parciais: 0, letivos: 0, datasPerdidas: [] }));
         const eventos = [];
         for (let dt = new Date(ini); dt <= fim; dt.setUTCDate(dt.getUTCDate() + 1)) {
@@ -457,7 +477,7 @@ const Nucleo = (() => {
             else pd.letivos++;
         }
         // eventos fora do período (para a lista de feriados do ano) também entram, marcados
-        (cal.eventos || []).forEach((e) => { if (e.data < sem.inicio || e.data > sem.fim) eventos.push(Object.assign({}, e, { diaSemana: NOMES_DIA_JS[dataUTC(e.data).getUTCDay()], foraDoPeriodo: true, suspende: !!SUSPENDE[e.tipo] })); });
+        todosEventos.forEach((e) => { if (e.data < sem.inicio || e.data > sem.fim) eventos.push(Object.assign({}, e, { diaSemana: NOMES_DIA_JS[dataUTC(e.data).getUTCDay()], foraDoPeriodo: true, suspende: !!SUSPENDE[e.tipo] })); });
         eventos.sort((a, b) => a.data.localeCompare(b.data));
 
         // aulas perdidas por alocação
@@ -894,6 +914,7 @@ const Nucleo = (() => {
         const arr = (v) => Array.isArray(v) ? v : [];
         if (!cfg.unidade || typeof cfg.unidade !== 'object' || !cfg.unidade.nome) cfg.unidade = { id: 444, nome: 'Centro de Engenharias' };
         if (!cfg.calendario || typeof cfg.calendario !== 'object' || !Array.isArray(cfg.calendario.eventos)) cfg.calendario = calendario2027();
+        cfg.eventosCurso = (Array.isArray(cfg.eventosCurso) ? cfg.eventosCurso : []).filter((e) => e && e.inicio).map((e) => ({ inicio: e.inicio, fim: e.fim || e.inicio, descricao: e.descricao || 'Evento do curso', semAula: e.semAula !== false }));
         d.cursos = arr(x.cursos).map((c) => ({ id: c.id || novoId('c'), cod: c.cod || null, nome: c.nome || 'Curso', semestres: Number(c.semestres) || 10, oferta: arr(c.oferta), reoferta: arr(c.reoferta),
             preferencias: (c.preferencias && typeof c.preferencias === 'object') ? Object.fromEntries(Object.entries(c.preferencias).map(([k, v]) => [k, arr(v).filter((t) => NOME_TURNO[t])])) : {} }));
         d.professores = arr(x.professores).map((p) => ({ id: p.id || novoId('p'), nome: p.nome || 'Professor', email: p.email || '', indisp: arr(p.indisp), pesquisa: arr(p.pesquisa) }));
@@ -972,7 +993,7 @@ const Nucleo = (() => {
         CARATER, POLITICA, DIAS_SEMANA, NOME_TURNO,
         chave, separa, copia, rngSemente, turno, situacao, todasChaves, seguidas, indices, gruposEquivalentes, janelaCursos,
         profPodeNaSala, salasPermitidas, blocos, turmasDe, sigla, nomeDisc, nomeDe, rotuloHorario,
-        relatorios, CALENDARIO_URL_2027, calendario2027, lerCalendarioTexto, analisarCalendario, NOME_TIPO_CAL, dataBR, codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
+        relatorios, eventosDoCalendario, datasDoPeriodo, CALENDARIO_URL_2027, calendario2027, lerCalendarioTexto, analisarCalendario, NOME_TIPO_CAL, dataBR, codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
         novoId, dadosVazios, horariosPadrao, normalizar, excluir, chavesTurno, remapearConfig
     };
 })();

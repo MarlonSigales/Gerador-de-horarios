@@ -100,6 +100,19 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
    sala, laboratório, aula, preparo de aula (fator ajustável), pesquisa e total, para o curso e para a unidade; PDF com
    a lista dos professores e o desvio de cada um (z).
 
+44 [resolvido 17/11/2026] Papéis: botão 🔑 Entrar no topo — Curso (coordenação; senha criada no primeiro acesso, guardada
+   só como hash nos dados do curso), Professor (senha individual) e Administrador. Editar exige entrar: o curso coloca
+   e muda os horários de todos; o professor, só os seus (aulas dos outros ficam bloqueadas para ele). Aleatorizar,
+   soltar todas e limpar a grade: só curso/adm.
+45 [resolvido 17/11/2026] Clicar numa célula vazia (editando) abre "Colocar aula": disciplina (do papel), aulas seguidas,
+   sala/laboratório (sugere a primeira sem conflito; respeita a autorização do responsável do lab), prévia dos conflitos;
+   se a disciplina já está toda na grade, escolhe qual bloco mover para lá. Toda aula colocada ou movida fica fixada.
+46 [resolvido 17/11/2026] "Travada" passou a se chamar "fixada". Aleatorizar só sorteia as não fixadas (testado com 4
+   sementes: fixadas idênticas, sem duplicar; bloco fixado em parte só sorteia o resto).
+47 [resolvido 17/11/2026] Eventos do curso no calendário (Configuração; semana acadêmica etc.; "sem aula" ou "há aula";
+   só o curso altera): entram nos dias letivos do PDF e no cronograma dos planos. Ausências do professor (congressos,
+   ausências justificadas) na Área do professor → aba Ausências: entram no cronograma dos planos dele (dados individuais).
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
@@ -117,7 +130,11 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 45 de 45 passaram (inclui verificação interna, rendimento, plano/cronograma com feriados,
+- node tests/testes.js: 49 de 49 passaram (17/11 manhã: fixadas no Aleatorizar, eventos do curso, ausências).
+- Playwright 360/1366 (17/11 manhã): login exigido para editar/aleatorizar; curso (1º acesso) coloca aula em célula vazia
+  (prévia de conflitos) e ela fica fixada e é mantida no Aleatorizar; professora não mexe em aula dos outros nem
+  aleatoriza; só vê as disciplinas dela ao colocar; ausências salvas; sem estouro e sem erro de JS.
+- Antes: 45 de 45 passaram (inclui verificação interna, rendimento, plano/cronograma com feriados,
   RAAD, dados individuais sem senha, unidade, DOCX e MEGA da unidade). Antes: 35 de 35 passaram (inclui MEGA simulado, unidade, turno preferido, matriz, exportação, calendário,
   pesquisa e relatórios).
 - Playwright 360 e 1366 px (17/11): primeiro acesso do professor, senha errada recusada, rendimento, plano (cronograma +

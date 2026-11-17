@@ -70,6 +70,7 @@
     };
 
     function renderMenu() {
+        renderPapel();
         $('#sidebar-nav').innerHTML = PAGINAS.map((p) => {
             let c = p.conta ? p.conta() : '';
             const ruim = c && typeof c === 'object' && c.ruim; if (c && typeof c === 'object') c = c.t;
@@ -117,6 +118,7 @@
         $('#cfg-dias').innerHTML = N.DIAS_SEMANA.map((d) => `<label><input type="checkbox" value="${esc(d)}"${c.dias.includes(d) ? ' checked' : ''}> ${esc(d)}</label>`).join('');
         $('#cfg-horarios').value = c.horarios.map((h) => `${h.ini}-${h.fim}`).join('\n');
         renderCalendario();
+        renderEventosCurso();
         $('#cfg-codigos').innerHTML = `<table class="lista" style="font-size:.82rem"><thead><tr><th>Horário</th>${c.dias.map((d) => `<th>${esc(d)}</th>`).join('')}</tr></thead><tbody>
             ${c.horarios.map((h, j) => `<tr><td>${esc(h.ini)}–${esc(h.fim)}</td>${c.dias.map((_, i) => `<td><b>${N.codigoHorario(c, i, j)}</b></td>`).join('')}</tr>`).join('')}</tbody></table>`;
     }
@@ -476,7 +478,7 @@
             const ofertaCurso = ui.visao === 'curso' ? q.ofertas.find((o) => o.curso === ui.item && Number(o.semestre) === Number(ui.semestre)) : null;
             const sit = sitVisao || (q.ofertas.length && q.ofertas.every((o) => N.situacao(o.semestre, cfg.metade) === 'reoferta') ? 'reoferta' : 'oferta');
             const titulo = [discs.map((x) => N.nomeDisc(x)).join(' / ') + (discs.length > 1 ? ' (equivalentes)' : ''), `Professor: ${prof}`, `Sala: ${sala}`, `Turmas: ${turmas.join(', ')}`, `Horários (código): ${N.codigosDisciplina(D, q.id)}`,
-                a.travada ? 'Travada (o Aleatorizar não mexe)' : '', ...cs.map((x) => `${x.gravidade === 'erro' ? '⚠' : '•'} ${x.msg}`)].filter(Boolean).join('\n');
+                a.travada ? 'Fixada (o Aleatorizar não mexe)' : '', ...cs.map((x) => `${x.gravidade === 'erro' ? '⚠' : '•'} ${x.msg}`)].filter(Boolean).join('\n');
             const sel = ui.sel && indices.some((i) => ui.sel.includes(i));
             return `<div class="aula ${sit}${ofertaCurso && ofertaCurso.carater !== 'obrigatoria' ? ' optativa' : ''}${erro ? ' conflito-erro' : ''}${avis ? ' conflito-aviso' : ''}${sel ? ' selecionada' : ''}${indices.some((i) => ui.destaque.has(i)) ? ' piscar' : ''}"
                 data-i="${indices[0]}" title="${esc(titulo)}"${ui.editando ? ' draggable="true"' : ''}>
@@ -497,7 +499,7 @@
             <span><i style="background:#fdecea;border-color:var(--perigo)"></i>conflito (passe o mouse para ver)</span>
             <span><i style="background:repeating-linear-gradient(45deg,#f6f8f8,#f6f8f8 3px,#e3e9e8 3px,#e3e9e8 6px)"></i>${{ curso: 'fora do funcionamento do curso', professor: 'professor indisponível', sala: 'sala indisponível' }[ui.visao]}</span>
             ${ui.visao !== 'curso' ? '<span><i style="background:#f1eafc;border-color:#c9b3ef"></i>reservado para pesquisa</span>' : ''}
-            <span>🔒 travada (o Aleatorizar mantém)</span>
+            <span>🔒 fixada (o Aleatorizar não mexe)</span>
             ${ui.editando ? '<span><b>Editando:</b> clique (ou arraste) uma aula e depois a célula de destino. Verde = sem conflito, amarelo = aviso, vermelho = conflito.</span>' : ''}`;
         ui.destaque = new Set();
         pintarAlvos();
@@ -583,8 +585,8 @@
         ui.destaque = new Set(seus.flatMap((x) => x.alocs));
         const onde = N.rotuloHorario(D.config, `${d}|${h}`);
         aviso(seus.length
-            ? `Movido para ${esc(onde)}. <b>⚠ ${seus.length} conflito${seus.length > 1 ? 's' : ''}:</b><br><small>${seus.slice(0, 3).map((x) => esc(x.msg)).join('<br>')}${seus.length > 3 ? '<br>…veja a lista de conflitos' : ''}</small>`
-            : `Movido para ${esc(onde)}, sem conflito. 🔒 Travada para o Aleatorizar.`, seus.length ? 7000 : 3000);
+            ? `Colocado em ${esc(onde)} (🔒 fixada). <b>⚠ ${seus.length} conflito${seus.length > 1 ? 's' : ''}:</b><br><small>${seus.slice(0, 3).map((x) => esc(x.msg)).join('<br>')}${seus.length > 3 ? '<br>…veja a lista de conflitos' : ''}</small>`
+            : `Colocado em ${esc(onde)}, sem conflito. 🔒 Fixada: o Aleatorizar não mexe.`, seus.length ? 7000 : 3000);
         mudou();
     }
 
@@ -592,7 +594,8 @@
         const el = $('#painel-edicao');
         if (!ui.editando) { el.innerHTML = ''; return; }
         if (!ui.sel && !ui.ins) {
-            el.innerHTML = '<div class="painel-edicao"><h3>Modo de edição</h3><p class="muted">Clique numa aula (ou arraste) para escolhê-la; depois clique na célula para onde ela vai. As células ficam verdes (sem conflito), amarelas (aviso) ou vermelhas (conflito; passe o mouse para ver o motivo). Mude a visão para ver o mesmo horário pelo professor ou pela sala.</p></div>';
+            const p = papelAtual();
+            el.innerHTML = `<div class="painel-edicao"><h3>Modo de edição — ${esc(p ? p.rotulo : '')}</h3><p class="muted">${p && p.tipo === 'prof' ? 'Você muda só as suas aulas. ' : 'Você muda as aulas de todos. '}<b>Clique numa célula vazia</b> para colocar uma aula ali (disciplina, aulas seguidas e sala ou laboratório). Ou clique numa aula (ou arraste) para escolhê-la e depois clique na célula para onde ela vai. As células ficam verdes (sem conflito), amarelas (aviso) ou vermelhas (conflito; passe o mouse para ver o motivo). Toda aula colocada ou movida fica 🔒 fixada: o Aleatorizar só sorteia as que não estão fixadas.</p></div>`;
             return;
         }
         const alocs = D.grade.alocacoes;
@@ -605,7 +608,7 @@
             titulo = discs.map((x) => N.nomeDisc(x)).join(' / ');
             info = `${esc(D.config.dias[a.d])} ${esc(ini.ini)}–${esc(fim.fim)} · ${esc(N.nomeDe(D.professores, discs[0].professor))}`;
             const trav = ui.sel.every((i) => alocs[i].travada);
-            botoes = `<button type="button" class="btn btn-secondary btn-sm" data-acao="travar">${trav ? '🔓 Destravar' : '🔒 Travar'}</button>
+            botoes = `<button type="button" class="btn btn-secondary btn-sm" data-acao="travar">${trav ? '🔓 Soltar (volta a ser sorteada)' : '🔒 Fixar'}</button>
                 <button type="button" class="btn btn-perigo btn-sm" data-acao="remover-bloco">Tirar da grade</button>`;
         } else {
             const q = D.disciplinas.find((x) => x.id === ui.ins.disc);
@@ -639,7 +642,7 @@
             const q = D.disciplinas.find((y) => y.id === x.disc);
             return `<tr><td><b>${esc(N.nomeDisc(q))}</b><br><small>${esc(N.nomeDe(D.professores, q.professor))}${motivos[q.id] ? ' — ' + esc(motivos[q.id]) : ''}</small></td>
                 <td>${x.faltam} aula${x.faltam > 1 ? 's' : ''}</td>
-                <td class="acoes">${ui.editando ? `<button type="button" class="btn btn-secondary btn-sm" data-acao="colocar" data-id="${esc(q.id)}">Colocar</button>` : ''}</td></tr>`;
+                <td class="acoes">${ui.editando && podeEditarDisc(q.id) ? `<button type="button" class="btn btn-secondary btn-sm" data-acao="colocar" data-id="${esc(q.id)}">Colocar</button>` : ''}</td></tr>`;
         }).join('')}</tbody></table>${ui.editando ? '' : '<small class="muted">Entre em ✏️ Editar para colocar à mão (o sistema mostra onde dá conflito).</small>'}`
             : '<p class="vazio">Todas as aulas cadastradas estão na grade.</p>';
     }
@@ -666,6 +669,7 @@
 
     function aleatorizar() {
         if (!D.disciplinas.length) return aviso('Cadastre as disciplinas primeiro.');
+        if (!podeCurso()) { aviso('Só o curso (coordenação) aleatoriza a grade. Professores colocam e fixam os próprios horários em ✏️ Editar.', 6000); if (!papelAtual()) pedirLogin('Entre como curso para aleatorizar.'); return; }
         const btn = $('[data-acao=aleatorizar]');
         btn.disabled = true; btn.textContent = '⏳ Gerando…';
         setTimeout(() => {
@@ -676,7 +680,8 @@
             btn.disabled = false; btn.textContent = '🎲 Aleatorizar';
             const sem = r.naoAlocadas.reduce((s, x) => s + x.aulas, 0);
             const c = N.conflitos(D);
-            aviso(sem ? `Grade gerada. <b>${sem} aula(s) sem lugar</b>: veja a lista abaixo da grade e o motivo.` : `Grade gerada: todas as aulas no lugar${c.erros ? `, mas com ${c.erros} conflito(s) das aulas travadas` : ', sem conflito'}.`, 5000);
+            const fixas = D.grade.alocacoes.filter((a) => a.travada).length;
+            aviso((fixas ? `${fixas} aula(s) fixada(s) mantida(s); só as outras foram sorteadas. ` : '') + (sem ? `Grade gerada. <b>${sem} aula(s) sem lugar</b>: veja a lista abaixo da grade e o motivo.` : `Grade gerada: todas as aulas no lugar${c.erros ? `, mas com ${c.erros} conflito(s) das aulas fixadas` : ', sem conflito'}.`), 6000);
             mudou();
         }, 30);
     }
@@ -794,6 +799,172 @@
     }
 
 
+
+    // ================================================================ papéis: curso (coordenação), professor, administrador
+    // A senha do curso é criada no primeiro acesso e fica (só o resumo/hash) nos dados do curso.
+    // Atenção: como tudo roda no navegador, os papéis organizam o uso; não são uma proteção forte dos arquivos.
+    const ehCurso = () => { try { return !!D.cursos[0] && sessionStorage.getItem('gh_curso') === N.normNome(D.cursos[0].nome); } catch (e) { return !!ui.curso; } };
+    const podeCurso = () => ehAdmin() || ehCurso();
+    const profIdLogado = () => { const ind = profLogado(); if (!ind) return null; const p = D.professores.find((x) => N.normNome(x.nome) === N.normNome(ind.nome)); return p ? p.id : null; };
+    function papelAtual() {
+        if (ehAdmin()) return { tipo: 'admin', rotulo: 'Administrador' };
+        if (ehCurso()) return { tipo: 'curso', rotulo: `Curso: ${N.sigla(D.cursos[0].nome)}` };
+        const ind = profLogado(); if (ind) return { tipo: 'prof', rotulo: ind.nome.split(' ')[0] };
+        return null;
+    }
+    /** O papel atual pode mexer nesta aula? Curso e administrador: todas; professor: só as dele. */
+    function podeEditarAloc(i) {
+        if (podeCurso()) return true;
+        const a = D.grade.alocacoes[i], q = a && D.disciplinas.find((x) => x.id === a.disc);
+        const pid = profIdLogado();
+        return !!(pid && q && q.professor === pid);
+    }
+    function podeEditarDisc(discId) {
+        if (podeCurso()) return true;
+        const q = D.disciplinas.find((x) => x.id === discId), pid = profIdLogado();
+        return !!(pid && q && q.professor === pid);
+    }
+    function sairPapel() {
+        try { sessionStorage.removeItem('gh_curso'); sessionStorage.removeItem('gh_prof'); sessionStorage.removeItem('gh_admin'); } catch (e) { /* ok */ }
+        ui.curso = false; ui.prof = null; ui.admin = false; ui.editando = false; ui.sel = null; ui.ins = null;
+        renderTudo(); aviso('Você saiu.');
+    }
+    /** Janela de entrada: curso (coordenação), professor ou administrador. */
+    function pedirLogin(msg) {
+        const curso = D.cursos[0];
+        const temSenhaCurso = !!(D.config.acessoCurso && D.config.acessoCurso.hash);
+        const nomes = D.professores.map((p) => p.nome).sort((a, b) => a.localeCompare(b));
+        abrirJanela('Entrar', `${msg ? `<p class="muted">${esc(msg)}</p>` : ''}
+            <div class="checks" style="flex-direction:column;margin-bottom:.6rem">
+                <label><input type="radio" name="papel" value="curso" checked> <b>Curso</b> (coordenação: coloca e muda os horários de todos)${curso ? ` — ${esc(curso.nome)}` : ''}</label>
+                <label><input type="radio" name="papel" value="prof"> <b>Professor</b> (coloca e muda só os seus horários e laboratórios)</label>
+                <label><input type="radio" name="papel" value="admin"> <b>Administrador</b></label></div>
+            <div data-p="curso">${!curso ? '<p class="vazio">Escolha o curso da grade primeiro (página Curso).</p>' : temSenhaCurso
+                ? '<div class="campos"><label class="campo"><span>Senha do curso</span><input type="password" name="sc" autocomplete="current-password"></label></div>'
+                : '<p class="muted"><b>Primeiro acesso do curso:</b> crie a senha da coordenação (ela vai, só como resumo, junto com os dados do curso).</p><div class="campos"><label class="campo"><span>Nova senha</span><input type="password" name="sc" autocomplete="new-password"></label><label class="campo"><span>Repita</span><input type="password" name="sc2" autocomplete="new-password"></label></div>'}</div>
+            <div data-p="prof" hidden><div class="campos"><label class="campo"><span>Seu nome</span><select name="pn">${nomes.map((n) => `<option>${esc(n)}</option>`).join('')}</select></label></div><div data-senhas-prof></div></div>
+            <div data-p="admin" hidden><div class="campos"><label class="campo"><span>Usuário</span><input type="text" name="au" autocomplete="username"></label><label class="campo"><span>Senha</span><input type="password" name="as" autocomplete="current-password"></label></div></div>
+            <p class="muted" data-erro style="color:var(--perigo)"></p>`,
+        (dlg) => {
+            const papel = $('[name=papel]:checked', dlg).value, erro = (t) => { $('[data-erro]', dlg).textContent = t; };
+            (async () => {
+                if (papel === 'curso') {
+                    if (!curso) return erro('Escolha o curso primeiro.');
+                    const s1 = val(dlg, 'sc');
+                    if (!temSenhaCurso) {
+                        if (s1.length < 4 || s1 !== val(dlg, 'sc2')) return erro('A senha precisa ter 4+ caracteres e as duas precisam conferir.');
+                        const sal = Math.random().toString(36).slice(2);
+                        D.config.acessoCurso = { sal, hash: await Planos.hashSenha(s1, sal) }; salvarLocal();
+                    } else if (await Planos.hashSenha(s1, D.config.acessoCurso.sal) !== D.config.acessoCurso.hash) return erro('Senha do curso não confere.');
+                    ui.curso = true; try { sessionStorage.setItem('gh_curso', N.normNome(curso.nome)); } catch (e) { /* ok */ }
+                } else if (papel === 'prof') {
+                    const nome = val(dlg, 'pn'), s1 = val(dlg, 'ps');
+                    let ind = carregarInd(nome);
+                    if (!ind || !ind.senhaHash) {
+                        if (s1.length < 4 || s1 !== val(dlg, 'ps2')) return erro('A senha precisa ter 4+ caracteres e as duas precisam conferir.');
+                        ind = ind || Planos.individualVazio(nome); ind.senhaHash = await Planos.hashSenha(s1, ind.sal);
+                    } else if (await Planos.hashSenha(s1, ind.sal) !== ind.senhaHash) return erro('Senha não confere.');
+                    Planos.registrarSemestre(ind, D); salvarInd(ind); entrarComo(nome);
+                } else {
+                    if (!entrarAdmin(val(dlg, 'au'), val(dlg, 'as'))) return erro('Usuário ou senha não conferem.');
+                }
+                $('#janela').close(); renderTudo();
+                const p = papelAtual(); aviso(`Entrou como ${esc(p ? p.rotulo : '')}.${ui.pagina === 'grade' ? ' Clique em ✏️ Editar e depois numa célula ou numa aula.' : ''}`, 5000);
+            })();
+            return false; // a janela fecha quando a senha confere
+        }, (dlg) => {
+            const troca = () => { const v = $('[name=papel]:checked', dlg).value; $$('[data-p]', dlg).forEach((x) => { x.hidden = x.dataset.p !== v; }); };
+            const senhasProf = () => {
+                const nome = val(dlg, 'pn'), ind = nome && carregarInd(nome);
+                $('[data-senhas-prof]', dlg).innerHTML = ind && ind.senhaHash ? '<div class="campos"><label class="campo"><span>Senha</span><input type="password" name="ps" autocomplete="current-password"></label></div>'
+                    : '<p class="muted"><b>Primeiro acesso neste navegador:</b> crie sua senha.</p><div class="campos"><label class="campo"><span>Nova senha</span><input type="password" name="ps" autocomplete="new-password"></label><label class="campo"><span>Repita</span><input type="password" name="ps2" autocomplete="new-password"></label></div>';
+            };
+            $$('[name=papel]', dlg).forEach((r) => r.addEventListener('change', troca));
+            if ($('[name=pn]', dlg)) { $('[name=pn]', dlg).addEventListener('change', senhasProf); senhasProf(); }
+            if (!curso) { $('[name=papel][value=prof]', dlg).checked = true; troca(); }
+            return {};
+        }, 'Entrar');
+    }
+    function renderPapel() {
+        const b = $('#topbar-entrar'); if (!b) return;
+        const p = papelAtual();
+        b.innerHTML = p ? `👤<span class="rot"> ${esc(p.rotulo)} · sair</span>` : '🔑<span class="rot"> Entrar</span>';
+        b.dataset.acao = p ? 'sair-papel' : 'entrar';
+        b.title = p ? 'Sair' : 'Entrar como curso (coordenação), professor ou administrador';
+    }
+
+    /** Clique numa célula vazia (editando): colocar uma aula aqui (disciplina, aulas seguidas, sala/laboratório). */
+    function colocarAqui(d, h) {
+        const cfg = D.config;
+        const permitidas = D.disciplinas.filter((q) => q.aulas > 0 && q.ofertas.some((o) => o.semestre > 0) && podeEditarDisc(q.id));
+        if (!permitidas.length) return aviso(podeCurso() ? 'Não há disciplinas com aula para colocar.' : 'Você não tem disciplinas com aula nesta grade.');
+        const falta = (id) => (N.faltando(D).find((x) => x.disc === id) || {}).faltam || 0;
+        // na visão de curso/semestre, primeiro as disciplinas daquele semestre; na do professor, as dele; na da sala, quem pode usá-la
+        const daVisao = (q) => (ui.visao === 'curso' ? q.ofertas.some((o) => o.curso === ui.item && Number(o.semestre) === Number(ui.semestre)) : ui.visao === 'professor' ? q.professor === ui.item : true);
+        const ordem = permitidas.slice().sort((a, b) => (daVisao(b) - daVisao(a)) || (falta(b.id) > 0) - (falta(a.id) > 0) || N.nomeDisc(a).localeCompare(N.nomeDisc(b)));
+        const onde = `${cfg.dias[d]} ${cfg.horarios[h].ini} (código ${N.codigoHorario(cfg, d, h)})`;
+        abrirJanela(`Colocar aula — ${onde}`, `
+            <div class="campos"><label class="campo" style="grid-column:1/-1"><span>Disciplina</span><select name="disc">${ordem.map((q) => `<option value="${esc(q.id)}">${esc(N.nomeDisc(q))} — ${esc(N.nomeDe(D.professores, q.professor) || 'sem professor')}${falta(q.id) ? ` (faltam ${falta(q.id)})` : ' (já toda na grade)'}</option>`).join('')}</select></label>
+            <label class="campo"><span>Aulas seguidas a partir daqui</span><input type="number" name="n" min="1" max="8" value="2"></label>
+            <label class="campo"><span>Sala ou laboratório</span><select name="sala"></select></label></div>
+            <div data-mover></div>
+            <div data-previa class="muted"></div>`,
+        (dlg) => {
+            const id = val(dlg, 'disc'), n = Math.max(1, Number(val(dlg, 'n')) || 1), sala = val(dlg, 'sala');
+            const mover = $('[name=mover]', dlg) && $('[name=mover]', dlg).value;
+            ui.salaSel = sala;
+            if (mover) { ui.sel = mover.split(',').map(Number); ui.ins = null; } else { ui.ins = { disc: id, n }; ui.sel = null; }
+            soltarEm(d, h);
+            return true;
+        }, (dlg) => {
+            const atualiza = () => {
+                const id = val(dlg, 'disc'), q = D.disciplinas.find((x) => x.id === id);
+                const salas = D.salas.filter((s) => N.profPodeNaSala(s, q.professor));
+                const pref = N.salasPermitidas(D, q);
+                const selSala = $('[name=sala]', dlg), antes = selSala.value;
+                selSala.innerHTML = salas.sort((a, b) => pref.includes(b.id) - pref.includes(a.id)).map((s) => `<option value="${esc(s.id)}">${esc(s.nome)}${s.tipo === 'laboratorio' ? ' (lab.)' : ''}${pref.includes(s.id) ? '' : ' — fora da lista da disciplina'}</option>`).join('');
+                const f = falta(id);
+                if (salas.some((s) => s.id === antes) && selSala.dataset.mexido) selSala.value = antes;
+                else { // sugere a primeira sala/laboratório (da lista da disciplina) sem conflito neste horário
+                    const n0 = Math.max(1, Number($('[name=n]', dlg).value) || 1);
+                    const livre = [...selSala.options].map((o) => o.value).find((sid) => {
+                        if (!f) return false;
+                        const x = N.inserirBloco(D, id, n0, d, h, sid); if (!x) return false;
+                        const set = new Set(x.indices); return !N.conflitos(x.dados).lista.some((c) => c.gravidade === 'erro' && c.alocs.some((i) => set.has(i)));
+                    });
+                    if (livre) selSala.value = livre;
+                }
+                const bl = N.blocos(q).filter((b) => b <= Math.max(f, 1));
+                const nEl = $('[name=n]', dlg);
+                if (!nEl.dataset.mexido) nEl.value = f ? (bl.length ? Math.max(...bl) : f) : 2;
+                // já toda na grade: escolher um bloco para mover para cá
+                const blocos = [];
+                if (!f) D.grade.alocacoes.forEach((a, i) => { if (a.disc === id && !blocos.some((b) => b.includes(i))) blocos.push(N.blocoDe(D, i)); });
+                $('[data-mover]', dlg).innerHTML = !f ? `<label class="campo"><span>Esta disciplina já está toda na grade. Mover qual bloco para cá?</span><select name="mover">${blocos.map((b) => {
+                    const a0 = D.grade.alocacoes[b[0]], hs = b.map((i) => D.grade.alocacoes[i].h);
+                    return `<option value="${b.join(',')}">${esc(cfg.dias[a0.d])} ${esc(cfg.horarios[Math.min(...hs)].ini)}–${esc(cfg.horarios[Math.max(...hs)].fim)}, ${esc(N.nomeDe(D.salas, a0.sala))}</option>`; }).join('')}</select></label>` : '';
+                $('[name=n]', dlg).closest('.campo').hidden = !f;
+                previa();
+            };
+            const previa = () => {
+                const id = val(dlg, 'disc'), n = Math.max(1, Number(val(dlg, 'n')) || 1), sala = val(dlg, 'sala');
+                const mover = $('[name=mover]', dlg) && $('[name=mover]', dlg).value;
+                const r = mover ? N.avaliarMovimento(D, mover.split(',').map(Number), d, h, sala) : (() => { const x = N.inserirBloco(D, id, n, d, h, sala); if (!x) return { valido: false, conflitos: [] }; const set = new Set(x.indices); return { valido: true, conflitos: N.conflitos(x.dados).lista.filter((c) => c.alocs.some((i) => set.has(i))) }; })();
+                $('[data-previa]', dlg).innerHTML = !r.valido ? '<p style="color:var(--perigo)">Não cabe aqui: o bloco passaria do fim do turno.</p>'
+                    : r.conflitos.length ? `<p><b style="color:var(--perigo)">⚠ ${r.conflitos.length} conflito(s) se colocar aqui:</b></p><ul>${r.conflitos.map((c) => `<li>${esc(c.msg)}</li>`).join('')}</ul><small>Dá para colocar mesmo assim; os conflitos ficam marcados na grade.</small>`
+                        : '<p style="color:#3d6b12"><b>✓ Sem conflito aqui.</b> A aula fica fixada (o Aleatorizar não mexe).</p>';
+            };
+            $('[name=disc]', dlg).addEventListener('change', () => { delete $('[name=n]', dlg).dataset.mexido; atualiza(); });
+            $('[name=n]', dlg).addEventListener('input', () => { $('[name=n]', dlg).dataset.mexido = '1'; previa(); });
+            $('[name=sala]', dlg).addEventListener('change', () => { $('[name=sala]', dlg).dataset.mexido = '1'; previa(); });
+            dlg.addEventListener('change', (e) => { if (e.target.name === 'mover') previa(); });
+            // sala inicial: na visão de sala, a sala da visão
+            atualiza();
+            if (ui.visao === 'sala' && [...$('[name=sala]', dlg).options].some((o) => o.value === ui.item)) { $('[name=sala]', dlg).value = ui.item; previa(); }
+            return {};
+        }, 'Colocar e fixar');
+    }
+
     // ================================================================ área do professor (dados individuais: só neste navegador e por download)
     const CHAVE_IND = (nome) => 'gh_ind_' + N.normNome(nome).replace(/\s+/g, '_');
     function carregarInd(nome) { try { const t = localStorage.getItem(CHAVE_IND(nome)); if (t) return Object.assign(Planos.individualVazio(nome), JSON.parse(t)); } catch (e) { /* ok */ } return null; }
@@ -839,11 +1010,12 @@
             });
             return;
         }
-        const abas = [['rendimento', '📊 Rendimento'], ['planos', '📝 Planos de ensino'], ['raad', '📄 RAAD'], ['dados', '💾 Meus dados']];
+        const abas = [['rendimento', '📊 Rendimento'], ['planos', '📝 Planos de ensino'], ['ausencias', '📅 Ausências'], ['raad', '📄 RAAD'], ['dados', '💾 Meus dados']];
         let corpo = '';
         if (abaProf === 'rendimento') corpo = htmlRendimento(ind);
         if (abaProf === 'planos') corpo = htmlPlanos(ind);
         if (abaProf === 'raad') corpo = htmlRaad(ind);
+        if (abaProf === 'ausencias') corpo = htmlAusencias(ind);
         if (abaProf === 'dados') corpo = htmlDados(ind);
         el.innerHTML = `<div class="card"><div class="card-topo"><h2>👤 ${esc(ind.nome)}</h2><button type="button" class="btn btn-secondary btn-sm" data-acao="prof-sair">Sair</button></div>
             <div class="abas">${abas.map(([k, t]) => `<button type="button" data-aba-prof="${k}" class="${abaProf === k ? 'ativo' : ''}">${t}</button>`).join('')}</div></div>${corpo}`;
@@ -908,7 +1080,7 @@
         (dlg) => { ind.planos = ind.planos || {}; ind.planos[q.codigo || q.id] = lerPlanoForm(dlg, c); Planos.registrarSemestre(ind, D); salvarInd(ind); aviso('Plano salvo (fica para os próximos semestres; só as datas mudam).'); return true; },
         (dlg) => {
             $('[data-ver-crono]', dlg).addEventListener('click', () => {
-                const cr = Planos.cronograma(D, q, lerPlanoForm(dlg, c));
+                const cr = Planos.cronograma(D, q, lerPlanoForm(dlg, c), ind.ausencias);
                 $('#crono-previa', dlg).innerHTML = `${cr.avisos.map((a) => `<p class="muted" style="color:#7a5a00">⚠ ${esc(a)}</p>`).join('')}<table class="lista"><thead><tr><th>Semana</th><th>Data</th><th>Tópico</th><th>T/P</th></tr></thead><tbody>
                     ${cr.linhas.map((l) => `<tr style="${l.semAula ? 'color:var(--suave);font-style:italic' : ''}"><td>${l.semana}</td><td>${l.dataBR}</td><td>${esc(l.topico)}</td><td>${l.tipo}</td></tr>`).join('')}</tbody></table>`;
             });
@@ -926,10 +1098,39 @@
     async function baixarPlanoDocx(ind, discId) {
         const q = D.disciplinas.find((x) => x.id === discId);
         try {
-            const blob = await DocxDocs.plano(Planos.planoDoSemestre(D, q, (ind.planos || {})[q.codigo || q.id]));
+            const blob = await DocxDocs.plano(Planos.planoDoSemestre(D, q, (ind.planos || {})[q.codigo || q.id], ind.ausencias));
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `plano-de-ensino-${q.codigo || 'disciplina'}-${D.config.ano}-${D.config.metade}.docx`; document.body.appendChild(a); a.click(); a.remove();
             aviso('Plano de ensino (.docx) baixado.');
         } catch (e) { aviso('Não consegui gerar o DOCX: ' + esc(e.message)); }
+    }
+    const linhaPeriodo = (e, i, alvo, comSemAula) => `<tr><td><input type="date" data-${alvo}="${i}" data-campo="inicio" value="${esc(e.inicio || '')}"></td><td><input type="date" data-${alvo}="${i}" data-campo="fim" value="${esc(e.fim || '')}"></td>
+        <td><input type="text" data-${alvo}="${i}" data-campo="${comSemAula ? 'descricao' : 'motivo'}" value="${esc((comSemAula ? e.descricao : e.motivo) || '')}" placeholder="${comSemAula ? 'ex.: Semana Acadêmica da Engenharia Agrícola' : 'ex.: Congresso CONBEA (ausência justificada)'}"></td>
+        ${comSemAula ? `<td><select data-${alvo}="${i}" data-campo="semAula"><option value="1"${e.semAula !== false ? ' selected' : ''}>sem aula</option><option value="0"${e.semAula === false ? ' selected' : ''}>há aula</option></select></td>` : ''}
+        <td class="acoes"><button type="button" class="btn btn-perigo btn-sm" data-acao="${alvo}-tirar" data-i="${i}">×</button></td></tr>`;
+    function lerPeriodos(alvo) {
+        const l = {};
+        $$(`[data-${alvo}]`).forEach((el) => { const i = el.getAttribute(`data-${alvo}`); (l[i] = l[i] || {})[el.dataset.campo] = el.value; });
+        return Object.keys(l).sort((a, b) => a - b).map((i) => l[i]).filter((e) => e.inicio).map((e) => Object.assign(e, { fim: e.fim || e.inicio, semAula: e.semAula === undefined ? undefined : e.semAula !== '0' }));
+    }
+    function renderProfessorSemSalvar(ind) { // mostra a linha nova sem gravar ainda
+        const el = $('#professor-conteudo .card + .card') || null;
+        const tmp = Object.assign({}, ind);
+        const html = htmlAusencias(tmp);
+        if (el) el.outerHTML = html;
+    }
+    function renderEventosCurso() {
+        const el = $('#cal-eventos-curso'); if (!el) return;
+        const l = D.config.eventosCurso || [];
+        el.innerHTML = `<div class="tabela-wrap"><table class="lista"><thead><tr><th>Início</th><th>Fim</th><th>Descrição</th><th>Aulas</th><th></th></tr></thead><tbody>
+            ${l.map((e, i) => linhaPeriodo(e, i, 'evc', true)).join('') || '<tr><td colspan="5" class="vazio">Nenhum evento do curso.</td></tr>'}</tbody></table></div>`;
+    }
+    function htmlAusencias(ind) {
+        const l = ind.ausencias || [];
+        return `<div class="card"><div class="card-topo"><h2>Ausências justificadas, congressos etc.</h2><div class="barra" style="margin:0">
+            <button type="button" class="btn btn-secondary btn-sm" data-acao="aus-mais">+ Período</button><button type="button" class="btn btn-primary btn-sm" data-acao="aus-salvar">Salvar</button></div></div>
+            <p class="muted">Nestas datas não há aula sua: os planos de ensino marcam "Não haverá aula — motivo" e os tópicos seguem no próximo encontro. Ficam só com você (dados individuais).</p>
+            <div class="tabela-wrap"><table class="lista"><thead><tr><th>Início</th><th>Fim</th><th>Motivo</th><th></th></tr></thead><tbody>
+            ${l.map((e, i) => linhaPeriodo(e, i, 'aus', false)).join('') || '<tr><td colspan="4" class="vazio">Nenhuma ausência. Clique em “+ Período”.</td></tr>'}</tbody></table></div></div>`;
     }
     function htmlRaad(ind) {
         const r = Planos.raad(D, ind), p = ind.perfil || {};
@@ -972,7 +1173,7 @@
         const atual = carregarInd(x.nome) || Planos.individualVazio(x.nome);
         Object.assign(atual, { planos: Object.assign({}, atual.planos, x.planos || {}), historico: Object.assign({}, atual.historico, x.historico || {}),
             perfil: Object.assign({}, atual.perfil, x.perfilFuncional || {}), projetos: (x.projetos && x.projetos.length) ? x.projetos : atual.projetos,
-            avaliacoes: Object.assign({}, atual.avaliacoes, x.avaliacoes || {}) });
+            avaliacoes: Object.assign({}, atual.avaliacoes, x.avaliacoes || {}), ausencias: (x.ausencias && x.ausencias.length) ? x.ausencias : (atual.ausencias || []) });
         salvarInd(atual);
         aviso(`Dados de ${esc(x.nome)} trazidos.${atual.senhaHash ? '' : ' Entre e crie sua senha.'}`, 5000);
         renderProfessor();
@@ -1172,11 +1373,16 @@
                     break;
                 }
                 case 'aleatorizar': aleatorizar(); break;
-                case 'editar': ui.editando = !ui.editando; ui.sel = null; ui.ins = null; renderGradePagina(); break;
+                case 'editar':
+                    if (!ui.editando && !papelAtual()) { pedirLogin('Para editar, entre como curso (todos os horários) ou como professor (só os seus).'); break; }
+                    ui.editando = !ui.editando; ui.sel = null; ui.ins = null; renderGradePagina(); break;
+                case 'entrar': pedirLogin(); break;
+                case 'sair-papel': sairPapel(); break;
                 case 'desfazer': desfazer(); break;
-                case 'destravar-tudo': guardarHistorico(); D.grade.alocacoes.forEach((a) => { a.travada = false; }); mudou(); aviso('Todas as aulas destravadas.'); break;
+                case 'destravar-tudo': if (!podeCurso()) { aviso('Só o curso (coordenação) solta todas as aulas.'); pedirLogin(); break; } guardarHistorico(); D.grade.alocacoes.forEach((a) => { a.travada = false; }); mudou(); aviso('Todas as aulas soltas: o Aleatorizar pode mexer em todas.'); break;
                 case 'limpar-grade':
-                    if (confirm('Tirar todas as aulas da grade (inclusive as travadas)? Dá para desfazer.')) { guardarHistorico(); D.grade = { alocacoes: [], naoAlocadas: [], geradaEm: null }; ui.sel = null; mudou(); }
+                    if (!podeCurso()) { aviso('Só o curso (coordenação) limpa a grade.'); pedirLogin(); break; }
+                    if (confirm('Tirar todas as aulas da grade (inclusive as fixadas)? Dá para desfazer.')) { guardarHistorico(); D.grade = { alocacoes: [], naoAlocadas: [], geradaEm: null }; ui.sel = null; mudou(); }
                     break;
                 case 'cancelar-sel': cancelarSelecao(); break;
                 case 'travar': {
@@ -1205,6 +1411,12 @@
                 }
                 case 'exportar-json': exportarJson(); break;
                 case 'prof-sair': sairProfessor(); break;
+                case 'aus-mais': { const ind = profLogado(); if (!ind) break; ind.ausencias = $$('[data-aus]').length ? lerPeriodos('aus') : (ind.ausencias || []); ind.ausencias.push({ inicio: '', fim: '', motivo: '' }); renderProfessorSemSalvar(ind); break; }
+                case 'aus-tirar': { const ind = profLogado(); if (!ind) break; ind.ausencias = lerPeriodos('aus'); ind.ausencias.splice(Number(alvo.dataset.i), 1); salvarInd(ind); renderProfessor(); break; }
+                case 'aus-salvar': { const ind = profLogado(); if (!ind) break; ind.ausencias = lerPeriodos('aus').map(({ inicio, fim, motivo }) => ({ inicio, fim, motivo })); salvarInd(ind); aviso(`${ind.ausencias.length} período(s) de ausência salvos; os planos de ensino já consideram.`); renderProfessor(); break; }
+                case 'evc-mais': if (!podeCurso()) { aviso('Só o curso (coordenação) mexe nos eventos do curso.'); pedirLogin(); break; } D.config.eventosCurso = $$('[data-evc]').length ? lerPeriodos('evc') : (D.config.eventosCurso || []); D.config.eventosCurso.push({ inicio: '', fim: '', descricao: '', semAula: true }); renderEventosCurso(); break;
+                case 'evc-tirar': if (!podeCurso()) { pedirLogin(); break; } guardarHistorico(); D.config.eventosCurso = lerPeriodos('evc'); D.config.eventosCurso.splice(Number(alvo.dataset.i), 1); mudou(); break;
+                case 'evc-salvar': if (!podeCurso()) { aviso('Só o curso (coordenação) mexe nos eventos do curso.'); pedirLogin(); break; } guardarHistorico(); D.config.eventosCurso = lerPeriodos('evc'); mudou(); aviso(`${D.config.eventosCurso.length} evento(s) do curso salvos; entram no calendário, no PDF e nos planos de ensino.`); break;
                 case 'plano-editar': { const ind = profLogado(); if (ind) editarPlano(ind, id); break; }
                 case 'plano-docx': { const ind = profLogado(); if (ind) baixarPlanoDocx(ind, id); break; }
                 case 'raad-salvar': { const ind = profLogado(); if (ind) { salvarRaadForm(ind); aviso('RAAD salvo.'); renderProfessor(); } break; }
@@ -1266,7 +1478,11 @@
         if (ui.pagina === 'grade' && ui.editando && ui.visao !== 'relacao') {
             const chipEl = e.target.closest('#grade-wrap .aula');
             const td = e.target.closest('#grade-wrap td[data-d]');
-            if (chipEl && (!ui.sel && !ui.ins)) { selecionar(Number(chipEl.dataset.i)); return; }
+            if (chipEl && (!ui.sel && !ui.ins)) {
+                if (!podeEditarAloc(Number(chipEl.dataset.i))) { aviso(papelAtual() && papelAtual().tipo === 'prof' ? 'Esta aula não é sua: só o curso (coordenação) ou o professor dela pode mudar.' : 'Entre como curso ou como o professor da aula para mudar.'); return; }
+                selecionar(Number(chipEl.dataset.i)); return;
+            }
+            if (td && !chipEl && !ui.sel && !ui.ins) { colocarAqui(Number(td.dataset.d), Number(td.dataset.h)); return; }
             if (chipEl && ui.sel && ui.sel.includes(Number(chipEl.dataset.i))) {
                 // clicar na própria aula: se a sala mudou no painel, aplica; senão, desmarca
                 const a = D.grade.alocacoes[ui.sel[0]];
@@ -1315,6 +1531,7 @@
     document.addEventListener('dragstart', (e) => {
         const chipEl = e.target.closest && e.target.closest('#grade-wrap .aula');
         if (!chipEl || !ui.editando) return;
+        if (!podeEditarAloc(Number(chipEl.dataset.i))) { e.preventDefault(); aviso('Esta aula não é sua: só o curso ou o professor dela pode mudar.'); return; }
         e.dataTransfer.setData('text/plain', chipEl.dataset.i);
         e.dataTransfer.effectAllowed = 'move';
         const i = Number(chipEl.dataset.i);
@@ -1347,7 +1564,7 @@
     }
 
     // expõe para os testes no navegador
-    window.GeradorApp = { dados: () => D, ui, aleatorizar, soltarEm, selecionar, irPara };
+    window.GeradorApp = { dados: () => D, ui, aleatorizar, soltarEm, selecionar, irPara, podeEditarAloc: (i) => podeEditarAloc(i) };
 
     irPara(location.hash.slice(1) || 'inicio');
 })();

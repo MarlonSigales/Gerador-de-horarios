@@ -525,6 +525,54 @@ teste('MEGA (simulado): unidade salva em _unidade e não aparece como curso', as
     Nuvem.estado.simulado = null;
 });
 
+teste('Aleatorizar: as aulas fixadas ficam exatamente onde estão; só as não fixadas são sorteadas', () => {
+    const d = comGradeUm(5);
+    // fixa 3 blocos (como se o professor/curso tivesse colocado à mão)
+    const fixas = d.grade.alocacoes.filter((a) => ['instr', 'calc1', 'tcc'].includes(a.disc));
+    fixas.forEach((a) => { a.travada = true; });
+    const chave = (a) => `${a.disc}|${a.d}|${a.h}|${a.sala}`;
+    const antes = fixas.map(chave).sort();
+    const resultados = [1, 2, 3, 4].map((sem) => N.gerar(d, { semente: sem * 17 }));
+    resultados.forEach((r) => {
+        igual(r.alocacoes.filter((a) => a.travada).map(chave).sort(), antes, 'fixadas iguais');
+        ['instr', 'calc1', 'tcc'].forEach((id) => igual(r.alocacoes.filter((a) => a.disc === id).length, d.disciplinas.find((q) => q.id === id).aulas, `${id} sem duplicar`));
+        igual(r.naoAlocadas.length, 0);
+    });
+    const soltas = resultados.map((r) => r.alocacoes.filter((a) => !a.travada).map(chave).sort().join(';'));
+    ok(new Set(soltas).size > 1, 'as não fixadas mudam entre sorteios');
+});
+
+teste('Aleatorizar: bloco fixado em parte (2 de 4 aulas) só sorteia o resto', () => {
+    const d = comGradeUm(5);
+    d.grade.alocacoes = [{ disc: 'calc1', d: 2, h: 0, sala: 's101', travada: true }, { disc: 'calc1', d: 2, h: 1, sala: 's101', travada: true }];
+    const r = N.gerar(d, { semente: 3 });
+    const c = r.alocacoes.filter((a) => a.disc === 'calc1');
+    igual(c.length, 4);
+    igual(c.filter((a) => a.travada).length, 2);
+});
+
+teste('Eventos do curso: semana acadêmica tira as aulas do curso (dias letivos e cronograma)', () => {
+    const d = comGradeUm(1);
+    d.config.eventosCurso = [{ inicio: '2027-05-03', fim: '2027-05-07', descricao: 'Semana Acadêmica da Engenharia Agrícola', semAula: true }, { inicio: '2027-04-05', fim: '2027-04-05', descricao: 'Palestra', semAula: false }];
+    const a = N.analisarCalendario(d);
+    igual(a.porDia.map((x) => x.perdidos), [1, 1, 2, 2, 3]);
+    ok(a.eventos.some((e) => e.tipo === 'curso' && e.data === '2027-05-05'));
+    const q = d.disciplinas.find((x) => x.id === 'calc1');
+    d.grade.alocacoes = [{ disc: 'calc1', d: 0, h: 0, sala: 's101' }];
+    const cr = P.cronograma(d, q, P.conteudoPadrao(d, q));
+    ok(cr.linhas.find((l) => l.dataBR === '03/05/2027').topico.includes('Semana Acadêmica'));
+    ok(!cr.linhas.find((l) => l.dataBR === '05/04/2027').semAula, 'evento com aula não tira');
+    igual(N.normalizar(JSON.parse(JSON.stringify(d))).config.eventosCurso.length, 2);
+});
+
+teste('Ausências do professor (congresso etc.) entram no cronograma dos planos dele', () => {
+    const d = comGradeUm(1);
+    const q = d.disciplinas.find((x) => x.id === 'calc1');
+    d.grade.alocacoes = [{ disc: 'calc1', d: 1, h: 0, sala: 's101' }];
+    const cr = P.cronograma(d, q, Object.assign(P.conteudoPadrao(d, q), { roteiro: 'A\nB\nC' }), [{ inicio: '2027-03-15', fim: '2027-03-19', motivo: 'Congresso CONBEA' }]);
+    igual(cr.linhas.slice(0, 3).map((l) => l.topico), ['A', 'Não haverá aula — Congresso CONBEA', 'B']);
+});
+
 teste('Arquivo: normalizar completa campos faltando', () => {
     const d = N.normalizar({ cursos: [{ nome: 'X' }], disciplinas: [{ nome: 'Y', ofertas: [{ curso: 'c', semestre: '3' }] }] });
     igual(d.cursos[0].semestres, 10);

@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261117f">
+    <link rel="stylesheet" href="css/style.css?v=20261117j">
 </head>
 <body>
     <header class="topbar">
@@ -19,6 +19,7 @@
         </a>
         <span class="topbar-projeto" id="topbar-projeto">Engenharia Agrícola · CEng/UFPel</span>
         <a href="#grade" class="topbar-selo" id="topbar-selo" title="Situação da grade"></a>
+        <button type="button" class="btn btn-secondary btn-sm" id="topbar-entrar" data-acao="entrar" style="margin-left:.5rem;white-space:nowrap">🔑 Entrar</button>
     </header>
 
     <div class="app-corpo">
@@ -123,6 +124,13 @@
                             <div class="barra"><button type="button" class="btn btn-secondary btn-sm" data-acao="cal-salvar-datas">Salvar datas do semestre</button></div>
                             <div class="tabela-wrap" id="cal-eventos"></div>
                         </div>
+                        <div class="card">
+                            <div class="card-topo"><h2>Eventos do curso (semana acadêmica etc.)</h2><div class="barra" style="margin:0">
+                                <button type="button" class="btn btn-secondary btn-sm" data-acao="evc-mais">+ Evento</button><button type="button" class="btn btn-primary btn-sm" data-acao="evc-salvar">Salvar</button></div></div>
+                            <p class="muted">Datas do curso que não estão no calendário da UFPel. "Sem aula" tira as aulas do curso nesses dias: entram nos dias letivos do PDF e no cronograma dos planos de ensino.
+                                Só o curso (coordenação) altera. Ausências de cada professor (congressos, ausências justificadas) ficam na Área do professor.</p>
+                            <div id="cal-eventos-curso"></div>
+                        </div>
                     </section>
 
                                     <section class="pagina" id="p-cursos" data-titulo="Curso" hidden>
@@ -189,10 +197,10 @@
                         <div class="card">
                             <div class="card-topo"><h2>Grade horária</h2><div class="resumo" id="grade-resumo"></div></div>
                             <div class="barra">
-                                <button type="button" class="btn btn-primary" data-acao="aleatorizar" title="Monta a grade a partir das regras (mantém as aulas travadas 🔒)">🎲 Aleatorizar</button>
+                                <button type="button" class="btn btn-primary" data-acao="aleatorizar" title="Sorteia só as aulas que não estão fixadas 🔒 (só o curso)">🎲 Aleatorizar</button>
                                 <button type="button" class="btn btn-secondary" data-acao="editar" id="btn-editar" title="Mudar o que foi gerado">✏️ Editar</button>
                                 <button type="button" class="btn btn-secondary" data-acao="desfazer" id="btn-desfazer" title="Desfaz a última mudança na grade">↶ Desfazer</button>
-                                <button type="button" class="btn btn-secondary" data-acao="destravar-tudo" title="Tira a trava de todas as aulas">🔓 Destravar tudo</button>
+                                <button type="button" class="btn btn-secondary" data-acao="destravar-tudo" title="Solta todas as aulas fixadas (o Aleatorizar volta a poder mexer nelas)">🔓 Soltar todas</button>
                                 <button type="button" class="btn btn-perigo" data-acao="limpar-grade">Limpar grade</button>
                             </div>
                             <div id="painel-edicao"></div>
@@ -273,17 +281,17 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261117f"></script>
-    <script src="js/matrizes.js?v=20261117f"></script>
-    <script src="js/exemplo.js?v=20261117f"></script>
-    <script src="js/nuvem.js?v=20261117f"></script>
-    <script src="js/planos.js?v=20261117f"></script>
-    <script src="js/logos.js?v=20261117f"></script>
+    <script src="js/nucleo.js?v=20261117j"></script>
+    <script src="js/matrizes.js?v=20261117j"></script>
+    <script src="js/exemplo.js?v=20261117j"></script>
+    <script src="js/nuvem.js?v=20261117j"></script>
+    <script src="js/planos.js?v=20261117j"></script>
+    <script src="js/logos.js?v=20261117j"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
     <script src="js/vendor/docx.umd.js"></script>
-    <script src="js/docx-docs.js?v=20261117f"></script>
-    <script src="js/pdf.js?v=20261117f"></script>
-    <script src="js/app.js?v=20261117f"></script>
+    <script src="js/docx-docs.js?v=20261117j"></script>
+    <script src="js/pdf.js?v=20261117j"></script>
+    <script src="js/app.js?v=20261117j"></script>
 </body>
 </html>

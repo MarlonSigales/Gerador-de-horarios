@@ -179,7 +179,7 @@ const Planos = (() => {
      * eventos (SIIEPE etc.) também, se o plano pedir; e as datas sem aula do professor. Os tópicos do roteiro seguem
      * na ordem, só nos encontros com aula. No fim, o exame (primeiro encontro no período de exames, se houver).
      */
-    function cronograma(dados, disc, cont) {
+    function cronograma(dados, disc, cont, ausencias) {
         const n = N(), cfg = dados.config, cal = cfg.calendario || {};
         const sem = (cal.semestres || {})[String(cfg.metade)];
         const alocs = ((dados.grade && dados.grade.alocacoes) || []).filter((a) => a.disc === disc.id);
@@ -187,7 +187,7 @@ const Planos = (() => {
         const porDia = {};
         alocs.forEach((a) => { const nome = cfg.dias[a.d]; (porDia[nome] = porDia[nome] || []).push(cfg.horarios[a.h]); });
         const ev = {};
-        (cal.eventos || []).forEach((e) => { (ev[e.data] = ev[e.data] || []).push(e); });
+        n.eventosDoCalendario(dados, ausencias).forEach((e) => { (ev[e.data] = ev[e.data] || []).push(e); });
         const proprias = lerDatasSemAula(cont.datasSemAula, cal.ano || cfg.ano);
         const roteiro = lerRoteiro(cont.roteiro);
         const ini = dataUTC(sem.inicio), fim = dataUTC(sem.fim);
@@ -201,7 +201,7 @@ const Planos = (() => {
             const inicioAula = porDia[nome].map((h) => h.ini).sort()[0];
             const eventoTira = (e) => cont.eventosSemAula === 'todos' || cont.eventosSemAula === true ? true : (cont.eventosSemAula === 'nenhum' || cont.eventosSemAula === false ? false : /SIIEPE|SIIPE/i.test(e.descricao));
             const motivos = (ev[iso] || []).filter((e) => (e.tipo !== 'evento' || eventoTira(e)) && (!e.ateHora || inicioAula < e.ateHora))
-                .map((e) => `${n.NOME_TIPO_CAL[e.tipo] ? (e.tipo === 'evento' ? '' : n.NOME_TIPO_CAL[e.tipo] + ': ') : ''}${e.descricao}`);
+                .map((e) => `${n.NOME_TIPO_CAL[e.tipo] && !['evento', 'curso', 'ausencia'].includes(e.tipo) ? n.NOME_TIPO_CAL[e.tipo] + ': ' : ''}${e.descricao}`);
             if (proprias[iso]) motivos.push(proprias[iso]);
             if (motivos.length) { linhas.push({ semana, data: iso, dataBR: n.dataBR(iso), topico: `Não haverá aula — ${motivos.join('; ')}`, tipo: '—', semAula: true }); continue; }
             const r = roteiro[t++];
@@ -220,12 +220,12 @@ const Planos = (() => {
     }
 
     /** Plano completo do semestre (conteúdo + dados do semestre) — é o que vai para o DOCX e para o JSON. */
-    function planoDoSemestre(dados, disc, salvo) {
+    function planoDoSemestre(dados, disc, salvo, ausencias) {
         const cont = conteudo(dados, disc, salvo);
         const carater = ((disc.ofertas || [])[0] || {}).carater || 'obrigatoria';
         return Object.assign({}, cont, {
             ano: dados.config.ano, semestre: dados.config.metade, unidade: (dados.config.unidade || {}).nome || '', carater,
-            cursosAtendidos: cursosAtendidos(dados, disc), localHorario: localHorario(dados, disc), cronograma: cronograma(dados, disc, cont)
+            cursosAtendidos: cursosAtendidos(dados, disc), localHorario: localHorario(dados, disc), cronograma: cronograma(dados, disc, cont, ausencias)
         });
     }
 
@@ -245,7 +245,7 @@ const Planos = (() => {
     }
     function individualVazio(nome) {
         return { tipo: 'individual', versao: 1, nome, sal: Math.random().toString(36).slice(2), senhaHash: '', planos: {}, historico: {},
-            perfil: { siape: '', departamento: '', ingressoUfpel: '', ingressoCargo: '', jornada: '40' }, projetos: [], avaliacoes: { chefia: '', discente: '' }, atualizadoEm: null };
+            perfil: { siape: '', departamento: '', ingressoUfpel: '', ingressoCargo: '', jornada: '40' }, projetos: [], ausencias: [], avaliacoes: { chefia: '', discente: '' }, atualizadoEm: null };
     }
 
     /** JSON individual para baixar: perfil (do cadastro), rendimento, planos de ensino (conteúdo + do semestre). Sem a senha. */
@@ -262,7 +262,8 @@ const Planos = (() => {
             rendimento: rendimento(dados, ind.nome),
             perfilFuncional: ind.perfil || {}, projetos: ind.projetos || [], avaliacoes: ind.avaliacoes || {}, historico: ind.historico || {},
             planos: Object.fromEntries(Object.entries(ind.planos || {})),
-            planosDoSemestre: minhas.map((q) => planoDoSemestre(dados, q, (ind.planos || {})[q.codigo || q.id])),
+            ausencias: ind.ausencias || [],
+            planosDoSemestre: minhas.map((q) => planoDoSemestre(dados, q, (ind.planos || {})[q.codigo || q.id], ind.ausencias)),
             raad: raad(dados, ind)
         };
     }
