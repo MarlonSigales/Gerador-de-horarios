@@ -126,6 +126,8 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
    podendo = AVISO (responsável = erro). O gerador só bloqueia o responsável; para os regentes evita colisões quando dá
    (turma conjunta com outro curso tem prioridade). Aviso leve em azul na grade, na lista, nos selos e no PDF.
 
+50 [resolvido 17/11/2026] Rodapé: Ádamo de Sousa Araújo como coautor (página e rodapé do PDF).
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca

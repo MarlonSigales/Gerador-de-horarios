@@ -295,7 +295,7 @@ const GeradorPDF = (() => {
         for (let i = 1; i <= total; i++) {
             doc.setPage(i);
             doc.setFontSize(7); doc.setTextColor(...CINZA);
-            doc.text(txt(`Gerador de Horários — Marlon Soares Sigales · Laboratório de Instrumentação Agrícola · Engenharia Agrícola · CEng/UFPel · gerado em ${quando}`), 10, H - 5);
+            doc.text(txt(`Gerador de Horários — Marlon Soares Sigales e Ádamo de Sousa Araújo · Laboratório de Instrumentação Agrícola · Engenharia Agrícola · CEng/UFPel · gerado em ${quando}`), 10, H - 5);
             doc.text(`Página ${i} de ${total}`, W - 10, H - 5, { align: 'right' });
         }
         return doc;
