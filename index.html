@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261116b">
+    <link rel="stylesheet" href="css/style.css?v=20261116c">
 </head>
 <body>
     <header class="topbar">
@@ -80,8 +80,8 @@
                             <fieldset><legend>Dias de aula</legend><div class="checks" id="cfg-dias"></div></fieldset>
                             <fieldset><legend>Horários das aulas (um por linha, início-fim)</legend>
                                 <textarea id="cfg-horarios" rows="10" spellcheck="false"></textarea>
-                                <small>Exemplo: 07:30-08:20. Aulas com até 20 min de intervalo contam como seguidas (podem formar um bloco). O turno vem do início: manhã antes das 12h, tarde antes das 18h, noite depois.</small>
-                                <div class="barra" style="margin-top:.5rem"><button type="button" class="btn btn-secondary btn-sm" data-acao="horarios-padrao">Usar horários padrão (50 min)</button></div>
+                                <small>Exemplo: 08:00-08:50. Aulas com até 20 min de intervalo contam como seguidas (podem formar um bloco). O turno vem do início: manhã antes das 12h, tarde antes das 18h, noite depois.</small>
+                                <div class="barra" style="margin-top:.5rem"><button type="button" class="btn btn-secondary btn-sm" data-acao="horarios-padrao">Usar horários do CEng/UFPel (50 min)</button></div>
                             </fieldset>
                             <div class="barra"><button type="button" class="btn btn-primary" data-acao="salvar-config">Salvar configuração</button><small class="muted">Mudar dias ou horários mantém o que já foi marcado nos horários que continuam existindo.</small></div>
                         </div>
@@ -197,12 +197,12 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261116b"></script>
-    <script src="js/exemplo.js?v=20261116b"></script>
-    <script src="js/logos.js?v=20261116b"></script>
+    <script src="js/nucleo.js?v=20261116c"></script>
+    <script src="js/exemplo.js?v=20261116c"></script>
+    <script src="js/logos.js?v=20261116c"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
-    <script src="js/pdf.js?v=20261116b"></script>
-    <script src="js/app.js?v=20261116b"></script>
+    <script src="js/pdf.js?v=20261116c"></script>
+    <script src="js/app.js?v=20261116c"></script>
 </body>
 </html>

@@ -108,7 +108,7 @@ teste('Edição: mover bloco mostra os conflitos do destino e não cabe se passa
     let achouConflito = false, achouLivre = false;
     for (let dd = 0; dd < d.config.dias.length; dd++) for (let h = 0; h < d.config.horarios.length; h++) {
         const r = N.avaliarMovimento(d, bloco, dd, h);
-        if (h === 4) ok(!r.valido, '11:00 + 1 aula passa do turno da manhã');
+        if (h === 4 || h === 6) ok(!r.valido, 'bloco de 2 não passa do fim da manhã nem atravessa a pausa 15h10–16h');
         if (r.valido && r.erros) achouConflito = true;
         if (r.valido && !r.conflitos.length) achouLivre = true;
     }
@@ -152,6 +152,17 @@ teste('Excluir professor tira ele das disciplinas e dos laboratórios', () => {
     N.excluir(d, 'professor', 'marlon');
     ok(!d.salas.find((s) => s.id === 'lia').responsaveis.includes('marlon'));
     ok(d.disciplinas.filter((q) => q.professor === 'marlon').length === 0);
+});
+
+teste('Horários do CEng/UFPel: 14 períodos de 50 min e intervalos certos', () => {
+    const h = N.horariosPadrao(), cfg = { horarios: h };
+    igual(h.length, 14);
+    const min = (x) => { const [a, b] = x.split(':').map(Number); return a * 60 + b; };
+    h.forEach((x) => igual(min(x.fim) - min(x.ini), 50, x.ini));
+    ok(N.seguidas(cfg, 1), 'intervalo 9h40–10h não quebra o bloco');
+    ok(N.seguidas(cfg, 11), 'intervalo 20h40–20h50 não quebra o bloco');
+    ok(!N.seguidas(cfg, 6), '15h10–16h quebra o bloco');
+    igual([h[0].ini, h[4].fim, h[5].ini, h[9].fim, h[10].ini, h[13].fim], ['08:00', '12:30', '13:30', '18:30', '19:00', '22:30']);
 });
 
 teste('Arquivo: normalizar completa campos faltando', () => {

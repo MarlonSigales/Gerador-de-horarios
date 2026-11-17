@@ -37,7 +37,13 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
    regra rígida no gerador e conflito (erro) na edição.
 13 [resolvido 16/11/2026] Arquivo: salvar/abrir .json, novo, carregar exemplo; mudar dias/horários mantém o que continua existindo.
 
+19 [resolvido 16/11/2026] Horários padrão = CEng/UFPel, períodos de 50 min: manhã 08:00–12:30 (intervalo 09:40–10:00),
+   tarde 13:30–18:30 (intervalo 15:40–16:00), noite 19:00–22:30 (intervalo 20:40–20:50). Intervalos de 20 e 10 min não
+   quebram o bloco de aulas seguidas.
+
 === O QUE FALTA
+20 [fazer] Tarde: 13:30–15:40 são 130 min, não fecham em períodos de 50. Hoje: 13:30–14:20, 14:20–15:10, sem aula
+   15:10–16:00, depois 16:00–16:50, 16:50–17:40, 17:40–18:30. Confirmar com o usuário a grade real da tarde.
 14 [fazer] A mensagem do pedido foi cortada em "gere um pdf com ...": confirmar com o usuário o conteúdo do PDF (hoje: item 10).
 15 [fazer] Testar com os dados reais do curso (cursos, professores, salas e disciplinas da UFPel).
 16 [fazer] Ativar o GitHub Pages do repositório (Settings → Pages → main, / root), se ainda não estiver ativo.
@@ -45,7 +51,7 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 18 de 18 passaram (inclui gerar o PDF no Node).
+- node tests/testes.js: 19 de 19 passaram (inclui gerar o PDF no Node e os horários do CEng).
 - Gerador: exemplo (3 cursos, 7 professores, 7 salas, 19 disciplinas, 66 aulas) sem aula sem lugar e sem conflito em 20 sementes.
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript em todas as páginas;
   aleatorizar, editar (tirar e recolocar aula), criar sala pelo formulário e baixar o PDF (41 páginas) funcionaram.

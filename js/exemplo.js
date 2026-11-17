@@ -57,7 +57,7 @@ const Exemplo = (() => {
             q('eletrot', 'ENG040', 'Eletrotécnica', 'marlon', 3, '3', [], [o('eagri', 4), o('ecivil', 5)]),
             q('circ', 'ECA030', 'Circuitos Elétricos', 'diego', 4, '2+2', [], [o('ecaut', 3)]),
             q('instr', 'EAG050', 'Instrumentação Agrícola', 'marlon', 3, '3', ['lia'], [o('eagri', 5)]),
-            q('emb1', 'EAG061', 'Eletrônica Embarcada para Agricultura I', 'marlon', 3, '3', ['lia'], [o('eagri', 6, 'optativa')], { fixos: N.chavesTurno(cfg, 'tarde', [3]).slice(0, 3) }),
+            q('emb1', 'EAG061', 'Eletrônica Embarcada para Agricultura I', 'marlon', 3, '3', ['lia'], [o('eagri', 6, 'optativa')], { fixos: N.chavesTurno(cfg, 'tarde', [3]).slice(2, 5) }),
             q('embsis', 'ECA070', 'Sistemas Embarcados', 'diego', 4, '2+2', ['lia', 'linfo'], [o('ecaut', 7)]),
             q('posc', 'EAG070', 'Pós-Colheita de Grãos', 'bruno', 3, '3', ['lpc'], [o('eagri', 7)]),
             q('secag', 'EAG071', 'Secagem e Armazenagem', 'bruno', 4, '2+2', [], [o('eagri', 8)]),
