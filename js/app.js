@@ -46,7 +46,7 @@
         { id: 'pdf', titulo: 'PDF', num: 7 }
     ];
     const DESCR = {
-        config: 'Ano, metade do ano, dias e horários das aulas.',
+        config: 'Ano, semestre do ano, dias e horários das aulas.',
         cursos: 'Semestres e horários de oferta e de reoferta.',
         professores: 'Quem dá aula e quando não pode.',
         salas: 'Salas comuns e laboratórios com responsáveis.',
@@ -259,7 +259,7 @@
             <label class="campo"><span>Blocos de aulas seguidas</span><input type="text" name="blocos" value="${esc(q.blocos)}" placeholder="automático"><small>Ex.: 2+2 ou 3. Vazio: até 3 juntas; acima, blocos de 2.</small></label></div>
             <fieldset><legend>Cursos que usam esta disciplina</legend><div id="ofertas"></div>
                 <button type="button" class="btn btn-secondary btn-sm" data-add-oferta${D.cursos.length ? '' : ' disabled'}>+ Curso</button>
-                <small class="muted"> Na metade ${D.config.metade} os semestres ${D.config.metade === 1 ? 'ímpares' : 'pares'} são oferta e os demais são reoferta.</small></fieldset>
+                <small class="muted"> No ${D.config.metade}º semestre do ano, as disciplinas dos semestres ${D.config.metade === 1 ? 'ímpares' : 'pares'} do curso são oferta e as dos ${D.config.metade === 1 ? 'pares' : 'ímpares'} são reoferta (no próximo, inverte).</small></fieldset>
             <fieldset><legend>Salas ou laboratórios onde pode ocorrer</legend>${checks('salas', D.salas.map((s) => ({ id: s.id, nome: s.nome + (s.tipo === 'laboratorio' ? ' (lab.)' : '') })), q.salas)}
                 <small>Nada marcado = qualquer sala comum. Laboratório só aceita quem os responsáveis autorizam.</small></fieldset>
             <fieldset><legend>Disciplinas equivalentes (mesma turma, mesmo horário e mesma sala)</legend>${checks('equiv', D.disciplinas.filter((x) => x.id !== q.id).map((x) => ({ id: x.id, nome: N.nomeDisc(x) })), q.equivalentes)}</fieldset>

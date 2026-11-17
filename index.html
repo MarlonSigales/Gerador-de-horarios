@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261116g">
+    <link rel="stylesheet" href="css/style.css?v=20261116h">
 </head>
 <body>
     <header class="topbar">
@@ -60,7 +60,7 @@
                                 <li>Professor e sala/laboratório não têm duas aulas ao mesmo tempo, a não ser que as disciplinas sejam <b>equivalentes</b> (viram uma turma só).</li>
                                 <li>Horários proibidos de cada professor e de cada sala/laboratório, e horários fixos de cada disciplina.</li>
                                 <li>Cada curso tem seu número de semestres e seus horários de funcionamento para <b>ofertas</b> e para <b>reofertas</b>.
-                                    Na metade 1 do ano os semestres ímpares são oferta e os pares são reoferta; na metade 2, o contrário.</li>
+                                    No 1º semestre do ano as disciplinas dos semestres ímpares do curso são oferta e as dos pares são reoferta; no 2º semestre do ano, o contrário.</li>
                                 <li>Uma disciplina pode servir a vários cursos, com caráter obrigatório, optativo ou livre em cada um. No mesmo semestre de um curso não há duas aulas no mesmo horário.</li>
                                 <li>Os responsáveis por um laboratório têm prioridade nele e decidem se aceitam aulas de outros professores.</li>
                             </ul>
@@ -73,8 +73,8 @@
                             <div class="campos">
                                 <label class="campo"><span>Título da grade</span><input type="text" id="cfg-titulo"></label>
                                 <label class="campo"><span>Ano</span><input type="number" id="cfg-ano" min="2000" max="2100"></label>
-                                <label class="campo"><span>Metade do ano</span>
-                                    <select id="cfg-metade"><option value="1">1ª metade (semestres ímpares = oferta)</option><option value="2">2ª metade (semestres pares = oferta)</option></select>
+                                <label class="campo"><span>Semestre do ano (período letivo)</span>
+                                    <select id="cfg-metade"><option value="1">1º semestre do ano: semestres ímpares do curso = oferta, pares = reoferta</option><option value="2">2º semestre do ano: semestres pares do curso = oferta, ímpares = reoferta</option></select>
                                 </label>
                             </div>
                             <fieldset><legend>Dias de aula</legend><div class="checks" id="cfg-dias"></div></fieldset>
@@ -202,12 +202,12 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261116g"></script>
-    <script src="js/exemplo.js?v=20261116g"></script>
-    <script src="js/logos.js?v=20261116g"></script>
+    <script src="js/nucleo.js?v=20261116h"></script>
+    <script src="js/exemplo.js?v=20261116h"></script>
+    <script src="js/logos.js?v=20261116h"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
-    <script src="js/pdf.js?v=20261116g"></script>
-    <script src="js/app.js?v=20261116g"></script>
+    <script src="js/pdf.js?v=20261116h"></script>
+    <script src="js/app.js?v=20261116h"></script>
 </body>
 </html>

@@ -6,7 +6,7 @@ Organiza os horários dos professores nas salas de aula e nos laboratórios. Rod
 **Endereço:** https://marlonsigales.github.io/Gerador-de-horarios/
 
 ## Como usar
-1. **Configuração:** ano, metade do ano (na 1ª metade os semestres ímpares são oferta e os pares, reoferta; na 2ª, o contrário), dias e horários das aulas.
+1. **Configuração:** ano e semestre do ano (no 1º semestre do ano as disciplinas dos semestres ímpares do curso são oferta e as dos pares, reoferta; no 2º, o contrário), dias e horários das aulas.
 2. **Cursos:** número de semestres e horários de funcionamento para ofertas e para reofertas.
 3. **Professores:** horários em que cada um não pode dar aula.
 4. **Salas e laboratórios:** horários proibidos, responsáveis e se aceitam aulas de outros professores.

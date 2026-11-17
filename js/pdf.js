@@ -106,7 +106,7 @@ const GeradorPDF = (() => {
             doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...VERDE);
             doc.text(txt(`${cfg.titulo}`), 10, 38);
             doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(0, 0, 0);
-            doc.text(txt(`${cfg.ano} — ${cfg.metade}ª metade do ano: semestres ${cfg.metade === 1 ? 'ímpares' : 'pares'} são OFERTA e os ${cfg.metade === 1 ? 'pares' : 'ímpares'} são REOFERTA.`), 10, 46);
+            doc.text(txt(`${cfg.ano}/${cfg.metade} (${cfg.metade}º semestre do ano): disciplinas dos semestres ${cfg.metade === 1 ? 'ímpares' : 'pares'} do curso são OFERTA e as dos ${cfg.metade === 1 ? 'pares' : 'ímpares'} são REOFERTA.`), 10, 46);
             const total = D.disciplinas.reduce((s, q) => s + (Number(q.aulas) || 0), 0);
             const falt = N.faltando(D).reduce((s, x) => s + x.faltam, 0);
             doc.text(txt(`${alocs.length} de ${total} aulas na grade · ${c.erros} conflito(s) · ${c.avisos} aviso(s) · ${falt} aula(s) sem lugar.`), 10, 52);

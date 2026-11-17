@@ -47,6 +47,10 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
    tabela de códigos em Configuração, códigos no cabeçalho/linhas das grades e seção "Relação de disciplinas e
    professores" no PDF (por curso e semestre). Obs.: no pedido, "122 (segunda, tarde, 2º período)" pelo padrão é 222.
 
+22 [resolvido 16/11/2026] Texto: "metade do ano" virou "semestre do ano". Regra confirmada pelo usuário: no 1º semestre do ano
+   as disciplinas dos semestres ímpares do curso são oferta e as dos pares, reoferta; no 2º, o contrário (não é "1º = tudo
+   oferta, 2º = tudo reoferta"). O cálculo já era por paridade (Nucleo.situacao) e tem teste.
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
