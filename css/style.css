@@ -232,3 +232,9 @@ td.alvo-invalido { cursor: not-allowed; }
 .btn-primary { background: var(--verde); color: #fff; }
 .btn-primary:hover { background: var(--verde-escuro); }
 dialog.janela { margin: auto; position: fixed; inset: 0; }
+small.cod { display: block; font-size: .68rem; color: #8aa19d; font-weight: 600; }
+table.grade th small.cod { display: inline; color: #4f8a7c; }
+td.codigos { font-family: ui-monospace, Consolas, monospace; font-size: .86rem; white-space: nowrap; }
+table.relacao tr.grupo td { background: var(--verde-claro); color: var(--teal); border-top: 2px solid var(--borda); }
+.campo[hidden], [hidden] { display: none !important; }
+table.relacao td.codigos { white-space: normal; min-width: 150px; }

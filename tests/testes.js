@@ -165,6 +165,19 @@ teste('Horários do CEng/UFPel: 14 períodos de 50 min e intervalos certos', () 
     igual([h[0].ini, h[4].fim, h[5].ini, h[9].fim, h[10].ini, h[13].fim], ['08:00', '12:30', '13:30', '18:30', '19:00', '22:30']);
 });
 
+teste('Códigos de horário UFPel: 611, 222 e sexta à tarde 621 622 623 624', () => {
+    const cfg = { dias: ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'], horarios: N.horariosPadrao() };
+    igual(N.codigoHorario(cfg, 4, 0), '611');
+    igual(N.codigoHorario(cfg, 0, 6), '222');
+    igual([5, 6, 7, 8].map((h) => N.codigoHorario(cfg, 4, h)).join(' '), '621 622 623 624');
+    igual(N.codigoHorario(cfg, 2, 10), '431');
+    const d = exemplo();
+    d.grade.alocacoes = [5, 6, 7, 8].map((h) => ({ disc: 'secag', d: 4, h, sala: 's101' }));
+    igual(N.codigosDisciplina(d, 'secag'), '621 622 623 624');
+    const rel = N.relacao(d, 'eagri').find((l) => l.disc === 'secag');
+    igual([rel.semestre, rel.professor, rel.horarios, rel.salas], [8, 'Bruno Costa (exemplo)', '621 622 623 624', 'Sala 101']);
+});
+
 teste('Arquivo: normalizar completa campos faltando', () => {
     const d = N.normalizar({ cursos: [{ nome: 'X' }], disciplinas: [{ nome: 'Y', ofertas: [{ curso: 'c', semestre: '3' }] }] });
     igual(d.cursos[0].semestres, 10);

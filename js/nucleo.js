@@ -167,6 +167,56 @@ const Nucleo = (() => {
     const nomeDe = (lista, id) => ((lista || []).find((x) => x.id === id) || {}).nome || id;
     const rotuloHorario = (cfg, k) => { const [d, h] = separa(k); const ho = cfg.horarios[h]; return `${cfg.dias[d] || '?'} ${ho ? ho.ini : '?'}`; };
 
+    // ================================================================ CÓDIGOS DE HORÁRIO (padrão UFPel)
+
+    /** Número do dia no padrão UFPel: domingo 1, segunda 2, …, sexta 6, sábado 7. */
+    const NUM_DIA = { Domingo: 1, Segunda: 2, 'Terça': 3, Quarta: 4, Quinta: 5, Sexta: 6, 'Sábado': 7 };
+    const NUM_TURNO = { manha: 1, tarde: 2, noite: 3 };
+
+    /** Código de um horário: dia + turno + período no turno. Sexta, manhã, 1º período = 611; segunda, tarde, 2º = 222. */
+    function codigoHorario(cfg, d, h) {
+        const ho = cfg.horarios[h];
+        if (!ho) return '?';
+        const t = turno(ho);
+        let p = 0;
+        for (let i = 0; i <= h; i++) if (turno(cfg.horarios[i]) === t) p++;
+        return `${NUM_DIA[cfg.dias[d]] || d + 2}${NUM_TURNO[t]}${p}`;
+    }
+
+    /** Códigos dos horários de uma disciplina na grade, em ordem (ex.: "621 622 623 624"); com as salas, se pedir. */
+    function codigosDisciplina(dados, discId, comSala) {
+        const minhas = ((dados.grade && dados.grade.alocacoes) || []).filter((a) => a.disc === discId)
+            .sort((a, b) => (NUM_DIA[dados.config.dias[a.d]] || a.d) - (NUM_DIA[dados.config.dias[b.d]] || b.d) || a.h - b.h);
+        if (!comSala) return minhas.map((a) => codigoHorario(dados.config, a.d, a.h)).join(' ');
+        const porSala = [];
+        minhas.forEach((a) => {
+            let g = porSala.find((x) => x.sala === a.sala);
+            if (!g) { g = { sala: a.sala, cods: [] }; porSala.push(g); }
+            g.cods.push(codigoHorario(dados.config, a.d, a.h));
+        });
+        return porSala.map((g) => ({ sala: g.sala, codigos: g.cods.join(' ') }));
+    }
+
+    /**
+     * Relação de disciplinas e professores (sem grade): uma linha por disciplina em cada curso/semestre.
+     * curso = id para filtrar (ou vazio para todos). Ordem: curso, semestre, código.
+     */
+    function relacao(dados, curso) {
+        const linhas = [];
+        (dados.disciplinas || []).forEach((q) => (q.ofertas || []).forEach((o) => {
+            if (curso && o.curso !== curso) return;
+            const porSala = codigosDisciplina(dados, q.id, true);
+            linhas.push({
+                curso: o.curso, cursoNome: nomeDe(dados.cursos, o.curso), semestre: Number(o.semestre), situacao: situacao(o.semestre, dados.config.metade),
+                carater: o.carater, disc: q.id, codigo: q.codigo, nome: q.nome, professor: nomeDe(dados.professores, q.professor) || '',
+                salas: porSala.map((x) => nomeDe(dados.salas, x.sala)).join('; '),
+                horarios: porSala.length > 1 ? porSala.map((x) => `${x.codigos} (${nomeDe(dados.salas, x.sala)})`).join('; ') : (porSala[0] ? porSala[0].codigos : ''),
+                aulas: Number(q.aulas) || 0, naGrade: porSala.reduce((t, x) => t + x.codigos.split(' ').length, 0)
+            });
+        }));
+        return linhas.sort((a, b) => a.cursoNome.localeCompare(b.cursoNome) || a.semestre - b.semestre || String(a.codigo).localeCompare(String(b.codigo)) || a.nome.localeCompare(b.nome));
+    }
+
     // ================================================================ CONFLITOS
 
     /**
@@ -554,7 +604,7 @@ const Nucleo = (() => {
         CARATER, POLITICA, DIAS_SEMANA, NOME_TURNO,
         chave, separa, copia, rngSemente, turno, situacao, todasChaves, seguidas, indices, gruposEquivalentes, janelaCursos,
         profPodeNaSala, salasPermitidas, blocos, turmasDe, sigla, nomeDisc, nomeDe, rotuloHorario,
-        conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
+        codigoHorario, codigosDisciplina, relacao, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
         novoId, dadosVazios, horariosPadrao, normalizar, excluir, chavesTurno, remapearConfig
     };
 })();

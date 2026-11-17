@@ -41,6 +41,12 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
    tarde 13:30–18:30 (intervalo 15:40–16:00), noite 19:00–22:30 (intervalo 20:40–20:50). Intervalos de 20 e 10 min não
    quebram o bloco de aulas seguidas.
 
+21 [resolvido 16/11/2026] Códigos de horário no padrão UFPel (dia + turno + período; dom 1, seg 2 … sex 6, sáb 7; manhã 1,
+   tarde 2, noite 3): 611 = sexta, manhã, 1º período; sexta à tarde, 4 períodos = 621 622 623 624. As duas opções:
+   grade e relação sem grade. Aba "Relação (códigos)" na Grade (por curso ou todos), coluna de códigos em Disciplinas,
+   tabela de códigos em Configuração, códigos no cabeçalho/linhas das grades e seção "Relação de disciplinas e
+   professores" no PDF (por curso e semestre). Obs.: no pedido, "122 (segunda, tarde, 2º período)" pelo padrão é 222.
+
 === O QUE FALTA
 20 [fazer] Tarde: 13:30–15:40 são 130 min, não fecham em períodos de 50. Hoje: 13:30–14:20, 14:20–15:10, sem aula
    15:10–16:00, depois 16:00–16:50, 16:50–17:40, 17:40–18:30. Confirmar com o usuário a grade real da tarde.
@@ -51,7 +57,8 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 19 de 19 passaram (inclui gerar o PDF no Node e os horários do CEng).
+- node tests/testes.js: 20 de 20 passaram (inclui gerar o PDF no Node, os horários do CEng e os códigos UFPel).
+- Playwright 360 e 1366 px: aba Relação, Configuração e PDF sem estouro e sem erro de JavaScript.
 - Gerador: exemplo (3 cursos, 7 professores, 7 salas, 19 disciplinas, 66 aulas) sem aula sem lugar e sem conflito em 20 sementes.
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript em todas as páginas;
   aleatorizar, editar (tirar e recolocar aula), criar sala pelo formulário e baixar o PDF (41 páginas) funcionaram.

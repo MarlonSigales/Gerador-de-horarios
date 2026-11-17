@@ -99,6 +99,8 @@
         $('#cfg-metade').value = String(c.metade);
         $('#cfg-dias').innerHTML = N.DIAS_SEMANA.map((d) => `<label><input type="checkbox" value="${esc(d)}"${c.dias.includes(d) ? ' checked' : ''}> ${esc(d)}</label>`).join('');
         $('#cfg-horarios').value = c.horarios.map((h) => `${h.ini}-${h.fim}`).join('\n');
+        $('#cfg-codigos').innerHTML = `<table class="lista" style="font-size:.82rem"><thead><tr><th>Horário</th>${c.dias.map((d) => `<th>${esc(d)}</th>`).join('')}</tr></thead><tbody>
+            ${c.horarios.map((h, j) => `<tr><td>${esc(h.ini)}–${esc(h.fim)}</td>${c.dias.map((_, i) => `<td><b>${N.codigoHorario(c, i, j)}</b></td>`).join('')}</tr>`).join('')}</tbody></table>`;
     }
     function lerHorarios(txt) {
         const r = [];
@@ -322,13 +324,14 @@
         } else {
             const f = ($('#filtro-disc').value || '').toLowerCase();
             const lista = D.disciplinas.filter((q) => !f || [q.codigo, q.nome, nomeP(q.professor), ...q.ofertas.map((o) => N.nomeDe(D.cursos, o.curso))].join(' ').toLowerCase().includes(f));
-            html = lista.length ? `<table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Professor</th><th>Aulas</th><th>Cursos</th><th>Salas</th><th>Restrições</th><th></th></tr></thead><tbody>${lista.map((q) => `<tr>
+            html = lista.length ? `<table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Professor</th><th>Aulas</th><th>Cursos</th><th>Salas</th><th>Restrições</th><th>Horários (código)</th><th></th></tr></thead><tbody>${lista.map((q) => `<tr>
                 <td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b></td><td>${q.professor ? esc(nomeP(q.professor)) : '<span style="color:var(--perigo)">sem professor</span>'}</td>
                 <td>${q.aulas} <small>(${N.blocos(q).join('+') || '—'})</small></td>
                 <td>${q.ofertas.map((o) => { const c = D.cursos.find((x) => x.id === o.curso); const sit = N.situacao(o.semestre, D.config.metade);
                     return `<span class="etiqueta ${sit}" title="${esc(c ? c.nome : '')} — ${o.semestre}º semestre, ${N.CARATER[o.carater]}, ${sit}">${esc(c ? N.sigla(c.nome) : '?')} ${o.semestre}º ${N.CARATER[o.carater].slice(0, 3).toLowerCase()}.</span>`; }).join('') || '<small>—</small>'}</td>
                 <td>${q.salas.map((s) => `<span class="etiqueta lab">${esc(N.nomeDe(D.salas, s))}</span>`).join('') || '<small>salas comuns</small>'}</td>
-                <td><small>${[q.fixos.length ? `fixa em ${q.fixos.length} horários` : '', q.equivalentes.length ? `equivalente a ${q.equivalentes.map((e) => esc((D.disciplinas.find((x) => x.id === e) || {}).codigo || e)).join(', ')}` : ''].filter(Boolean).join('; ') || '—'}</small></td>${acoes(q.id)}</tr>`).join('')}</tbody></table>` : '';
+                <td><small>${[q.fixos.length ? `fixa em ${q.fixos.length} horários` : '', q.equivalentes.length ? `equivalente a ${q.equivalentes.map((e) => esc((D.disciplinas.find((x) => x.id === e) || {}).codigo || e)).join(', ')}` : ''].filter(Boolean).join('; ') || '—'}</small></td>
+                <td class="codigos">${esc(N.codigosDisciplina(D, q.id)) || '<small>—</small>'}</td>${acoes(q.id)}</tr>`).join('')}</tbody></table>` : '';
         }
         el.innerHTML = html || '<p class="vazio">Nada cadastrado ainda. Use o botão “+ Novo” acima ou carregue o exemplo no menu.</p>';
     }
@@ -350,6 +353,7 @@
     }
 
     function itensDaVisao() {
+        if (ui.visao === 'relacao') return [{ id: '*', nome: 'Todos os cursos' }, ...D.cursos];
         if (ui.visao === 'curso') return D.cursos;
         if (ui.visao === 'professor') return D.professores;
         return D.salas;
@@ -387,7 +391,7 @@
         $$('#visao-abas button').forEach((b) => b.classList.toggle('ativo', b.dataset.visao === ui.visao));
         const itens = itensDaVisao();
         if (!itens.some((x) => x.id === ui.item)) ui.item = itens.length ? itens[0].id : null;
-        $('#visao-rotulo').textContent = { curso: 'Curso', professor: 'Professor', sala: 'Sala ou laboratório' }[ui.visao];
+        $('#visao-rotulo').textContent = { curso: 'Curso', professor: 'Professor', sala: 'Sala ou laboratório', relacao: 'Curso' }[ui.visao];
         $('#visao-item').innerHTML = itens.map((x) => `<option value="${esc(x.id)}"${x.id === ui.item ? ' selected' : ''}>${esc(x.nome)}</option>`).join('');
         $('#visao-sem-campo').hidden = ui.visao !== 'curso';
         if (ui.visao === 'curso') {
@@ -399,7 +403,7 @@
                 return `<option value="${s}"${s === Number(ui.semestre) ? ' selected' : ''}>${s}º semestre — ${N.situacao(s, D.config.metade)} (${qtd} disc.)</option>`;
             }).join('');
         }
-        renderGrade(c);
+        if (ui.visao === 'relacao') renderRelacao(); else renderGrade(c);
         renderPainelEdicao();
         renderConflitos(c);
         renderFaltam();
@@ -426,7 +430,7 @@
             const linha2 = ui.visao === 'curso' ? `${prof.split(' ')[0]} · ${sala}` : ui.visao === 'professor' ? `${sala} · ${turmas.join(', ')}` : `${prof.split(' ')[0]} · ${turmas.join(', ')}`;
             const ofertaCurso = ui.visao === 'curso' ? q.ofertas.find((o) => o.curso === ui.item && Number(o.semestre) === Number(ui.semestre)) : null;
             const sit = sitVisao || (q.ofertas.length && q.ofertas.every((o) => N.situacao(o.semestre, cfg.metade) === 'reoferta') ? 'reoferta' : 'oferta');
-            const titulo = [discs.map((x) => N.nomeDisc(x)).join(' / ') + (discs.length > 1 ? ' (equivalentes)' : ''), `Professor: ${prof}`, `Sala: ${sala}`, `Turmas: ${turmas.join(', ')}`,
+            const titulo = [discs.map((x) => N.nomeDisc(x)).join(' / ') + (discs.length > 1 ? ' (equivalentes)' : ''), `Professor: ${prof}`, `Sala: ${sala}`, `Turmas: ${turmas.join(', ')}`, `Horários (código): ${N.codigosDisciplina(D, q.id)}`,
                 a.travada ? 'Travada (o Aleatorizar não mexe)' : '', ...cs.map((x) => `${x.gravidade === 'erro' ? '⚠' : '•'} ${x.msg}`)].filter(Boolean).join('\n');
             const sel = ui.sel && indices.some((i) => ui.sel.includes(i));
             return `<div class="aula ${sit}${ofertaCurso && ofertaCurso.carater !== 'obrigatoria' ? ' optativa' : ''}${erro ? ' conflito-erro' : ''}${avis ? ' conflito-aviso' : ''}${sel ? ' selecionada' : ''}${indices.some((i) => ui.destaque.has(i)) ? ' piscar' : ''}"
@@ -434,8 +438,8 @@
                 ${cs.length ? `<span class="alerta">⚠</span>` : ''}<b>${esc(discs.map((x) => x.codigo || x.nome.slice(0, 8)).join('/'))}</b>${a.travada ? ' 🔒' : ''}
                 <span class="nome">${esc(q.nome)}</span><small>${esc(linha2)}</small></div>`;
         };
-        wrap.innerHTML = `<table class="grade${ui.editando ? ' editando' : ''}"><thead><tr><th class="hora">Horário</th>${cfg.dias.map((d) => `<th>${esc(d)}</th>`).join('')}</tr></thead><tbody>
-            ${cfg.horarios.map((h, j) => `<tr class="${j && turnos[j] !== turnos[j - 1] ? 'quebra' : ''}"><td class="hora">${esc(h.ini)}–${esc(h.fim)}</td>
+        wrap.innerHTML = `<table class="grade${ui.editando ? ' editando' : ''}"><thead><tr><th class="hora">Horário</th>${cfg.dias.map((d, i) => `<th>${esc(d)} <small class="cod">(${N.codigoHorario(cfg, i, 0).charAt(0)})</small></th>`).join('')}</tr></thead><tbody>
+            ${cfg.horarios.map((h, j) => `<tr class="${j && turnos[j] !== turnos[j - 1] ? 'quebra' : ''}"><td class="hora">${esc(h.ini)}–${esc(h.fim)}<small class="cod">·${N.codigoHorario(cfg, 0, j).slice(1)}</small></td>
             ${cfg.dias.map((_, i) => {
                 const k = `${i}|${j}`;
                 const grupos = {};
@@ -450,6 +454,27 @@
             ${ui.editando ? '<span><b>Editando:</b> clique (ou arraste) uma aula e depois a célula de destino. Verde = sem conflito, amarelo = aviso, vermelho = conflito.</span>' : ''}`;
         ui.destaque = new Set();
         pintarAlvos();
+    }
+
+    /** Relação de disciplinas e professores com os códigos de horário (sem grade). */
+    function renderRelacao() {
+        const linhas = N.relacao(D, ui.item === '*' ? '' : ui.item);
+        const c = N.conflitos(D);
+        const comConflito = new Set();
+        D.grade.alocacoes.forEach((a, i) => { if ((c.porAloc[i] || []).some((x) => x.gravidade === 'erro')) comConflito.add(a.disc); });
+        let ultimo = '';
+        $('#grade-wrap').innerHTML = linhas.length ? `<table class="lista relacao"><thead><tr><th>Curso / sem.</th><th>Código</th><th>Disciplina</th><th>Caráter</th><th>Professor</th><th>Sala</th><th>Horários (código)</th></tr></thead><tbody>
+            ${linhas.map((l) => {
+                const grupo = `${l.curso}|${l.semestre}`;
+                const cab = grupo !== ultimo ? `<tr class="grupo"><td colspan="7"><b>${esc(l.cursoNome)}</b> — ${l.semestre}º semestre <span class="etiqueta ${l.situacao}">${l.situacao}</span></td></tr>` : '';
+                ultimo = grupo;
+                const falta = l.naGrade < l.aulas ? ` <span class="etiqueta reoferta" title="Aulas que faltam na grade">faltam ${l.aulas - l.naGrade}</span>` : '';
+                return `${cab}<tr><td>${esc(N.sigla(l.cursoNome))} ${l.semestre}º</td><td>${esc(l.codigo)}</td><td><b>${esc(l.nome)}</b></td><td>${esc(N.CARATER[l.carater])}</td>
+                    <td>${esc(l.professor) || '<span style="color:var(--perigo)">sem professor</span>'}</td><td>${esc(l.salas) || '—'}</td>
+                    <td class="codigos">${esc(l.horarios) || '—'}${comConflito.has(l.disc) ? ' <span style="color:var(--perigo)" title="Tem conflito: veja a lista de conflitos">⚠</span>' : ''}${falta}</td></tr>`;
+            }).join('')}</tbody></table>` : '<p class="vazio" style="padding:1rem">Nenhuma disciplina neste curso.</p>';
+        $('#legenda').innerHTML = '<span><b>Código do horário</b> = dia + turno + período. Dia: dom 1, seg 2, ter 3, qua 4, qui 5, sex 6, sáb 7. Turno: manhã 1, tarde 2, noite 3. Ex.: 611 = sexta, manhã, 1º período; 621 622 623 624 = sexta à tarde, 4 períodos.</span>'
+            + (ui.editando ? '<span><b>Para editar, use uma visão em grade</b> (curso, professor ou sala).</span>' : '');
     }
 
     /** Sala usada no movimento/inserção: a escolhida no painel. */
@@ -690,7 +715,7 @@
             return;
         }
         // grade: selecionar e mover
-        if (ui.pagina === 'grade' && ui.editando) {
+        if (ui.pagina === 'grade' && ui.editando && ui.visao !== 'relacao') {
             const chipEl = e.target.closest('#grade-wrap .aula');
             const td = e.target.closest('#grade-wrap td[data-d]');
             if (chipEl && (!ui.sel && !ui.ins)) { selecionar(Number(chipEl.dataset.i)); return; }
@@ -754,7 +779,7 @@
     function gerarPdf() {
         if (typeof GeradorPDF === 'undefined' || !window.jspdf) return aviso('A biblioteca de PDF não carregou. Recarregue a página.');
         const op = {};
-        ['capa', 'curso', 'professor', 'sala', 'disciplinas', 'conflitos', 'vazios'].forEach((k) => { op[k] = $(`#pdf-${k}`).checked; });
+        ['capa', 'curso', 'professor', 'sala', 'relacao', 'disciplinas', 'conflitos', 'vazios'].forEach((k) => { op[k] = $(`#pdf-${k}`).checked; });
         try {
             const doc = GeradorPDF.gerar(D, op);
             doc.save(nomeArquivo('pdf'));

@@ -2,7 +2,8 @@
  * © 2026 Gerador de Horários — Marlon Sigales. Todos os direitos reservados; copiar, reproduzir ou alterar exige autorização do autor (ver LICENSE).
  *
  * PDF da grade (A4 deitado) com jsPDF + AutoTable (cópias locais em js/vendor, licença MIT).
- * Uma página por grade: cada curso e semestre, cada professor, cada sala; capa, lista de disciplinas e conflitos.
+ * Uma página por grade: cada curso e semestre, cada professor, cada sala; capa, relação com códigos de horário
+ * (padrão UFPel: dia + turno + período, ex.: 621 622 623 624), lista de disciplinas e conflitos.
  */
 
 'use strict';
@@ -51,7 +52,7 @@ const GeradorPDF = (() => {
             const porCel = {};
             alocs.forEach((a, i) => { if (filtro(a)) (porCel[`${a.d}|${a.h}`] = porCel[`${a.d}|${a.h}`] || []).push(i); });
             const marcas = {};
-            const body = cfg.horarios.map((h, j) => [`${h.ini}\n${h.fim}`, ...cfg.dias.map((_, d) => {
+            const body = cfg.horarios.map((h, j) => [`${h.ini}\n${h.fim}\n[${N.codigoHorario(cfg, 0, j).slice(1)}]`, ...cfg.dias.map((_, d) => {
                 const k = `${d}|${j}`;
                 const grupos = {};
                 (porCel[k] || []).forEach((i) => { const a = alocs[i]; const g = `${eq.grupoDe[a.disc]}|${a.sala}`; (grupos[g] = grupos[g] || []).push(i); });
@@ -69,7 +70,7 @@ const GeradorPDF = (() => {
             const altLinha = Math.min(11, (H - topo - 34) / cfg.horarios.length);
             doc.autoTable({
                 startY: topo, margin: { left: 10, right: 10, bottom: 12 },
-                head: [['Horário', ...cfg.dias.map(txt)]], body,
+                head: [['Horário', ...cfg.dias.map((d, i) => txt(`${d} (${N.codigoHorario(cfg, i, 0).charAt(0)})`))]], body,
                 theme: 'grid',
                 styles: { fontSize: 6.3, cellPadding: 0.9, valign: 'middle', lineColor: [213, 224, 221], lineWidth: 0.15, minCellHeight: altLinha, overflow: 'linebreak' },
                 headStyles: { fillColor: VERDE, textColor: 255, halign: 'center', fontSize: 8 },
@@ -164,16 +165,42 @@ const GeradorPDF = (() => {
             legenda(`${s.responsaveis.length ? `Responsáveis: ${s.responsaveis.map(nomeP).join(', ')}. ` : ''}${N.POLITICA[s.politica]}.  Células cinza: horários em que não pode ser usada; amarelo: reoferta.`);
         });
 
+        // ---------------- relação de disciplinas e professores com códigos de horário (sem grade)
+        if (op.relacao !== false && D.disciplinas.length) {
+            const explica = 'Código do horário = dia + turno + período. Dia: dom 1, seg 2, ter 3, qua 4, qui 5, sex 6, sáb 7. Turno: manhã 1, tarde 2, noite 3. Ex.: 611 = sexta, manhã, 1º período; 621 622 623 624 = sexta à tarde, 4 períodos.';
+            D.cursos.forEach((cu) => {
+                const linhas = N.relacao(D, cu.id);
+                if (!linhas.length) return;
+                novaPagina();
+                cabecalho(`Relação de disciplinas e professores — ${cu.nome}`, `${cfg.titulo} — ${periodo}`);
+                doc.setFontSize(7.5); doc.setTextColor(...CINZA);
+                doc.text(doc.splitTextToSize(txt(explica), W - 20), 10, 26);
+                doc.setTextColor(0, 0, 0);
+                const body = [];
+                let ultimo = null;
+                linhas.forEach((l) => {
+                    if (l.semestre !== ultimo) { body.push([{ content: txt(`${l.semestre}º semestre (${l.situacao})`), colSpan: 7, styles: { fillColor: VERDE_CLARO, textColor: VERDE, fontStyle: 'bold' } }]); ultimo = l.semestre; }
+                    body.push([l.semestre + 'º', l.codigo, l.nome, N.CARATER[l.carater], l.professor || '—', l.salas || '—', (l.horarios || '—') + (l.naGrade < l.aulas ? ` (faltam ${l.aulas - l.naGrade})` : '')].map(txt));
+                });
+                doc.autoTable({
+                    startY: 31, margin: { left: 10, right: 10, bottom: 12 },
+                    head: [['Sem.', 'Código', 'Disciplina', 'Caráter', 'Professor responsável', 'Sala', 'Horários (código)']], body,
+                    theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 8, cellPadding: 1.2 },
+                    columnStyles: { 0: { cellWidth: 11, halign: 'center' }, 1: { cellWidth: 18 }, 2: { cellWidth: 70 }, 3: { cellWidth: 20 }, 4: { cellWidth: 50 }, 5: { cellWidth: 45 }, 6: { font: 'courier', fontStyle: 'bold' } }
+                });
+            });
+        }
+
         // ---------------- disciplinas
         if (op.disciplinas !== false && D.disciplinas.length) {
             novaPagina();
             cabecalho('Disciplinas', `${cfg.titulo} — ${periodo}`);
             doc.autoTable({
                 startY: 25, margin: { left: 10, right: 10, bottom: 12 },
-                head: [['Código', 'Disciplina', 'Professor responsável', 'Aulas', 'Cursos (semestre, caráter, situação)', 'Sala(s)', 'Horários na grade']],
+                head: [['Código', 'Disciplina', 'Professor responsável', 'Aulas', 'Cursos (semestre, caráter, situação)', 'Sala(s)', 'Horários (código)']],
                 body: D.disciplinas.map((q) => {
                     const minhas = alocs.filter((a) => a.disc === q.id).sort((a, b) => a.d - b.d || a.h - b.h);
-                    const hs = minhas.map((a) => `${cfg.dias[a.d].slice(0, 3)} ${cfg.horarios[a.h].ini}`).join(', ');
+                    const hs = N.codigosDisciplina(D, q.id);
                     const salas = [...new Set(minhas.map((a) => N.nomeDe(D.salas, a.sala)))].join(', ');
                     return [q.codigo, q.nome, nomeP(q.professor), `${minhas.length}/${q.aulas}`,
                         q.ofertas.map((o) => `${N.sigla(N.nomeDe(D.cursos, o.curso))} ${o.semestre}º ${N.CARATER[o.carater].toLowerCase()} (${N.situacao(o.semestre, cfg.metade)})`).join('; '),
