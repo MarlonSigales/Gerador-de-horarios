@@ -582,16 +582,16 @@ teste('Regentes: responsável e regentes dão aula juntos (gerador, conflitos, l
         const dd = exemploUm(); const r = N.gerar(dd, { semente: s }); dd.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
         igual(N.conflitos(dd).lista.filter((c) => c.tipo === 'prof').length, 0, `semente ${s}`);
     }
-    // conflito quando a regente tem outra aula no mesmo horário
+    // a regente (Elisa) tem aula da qual é responsável (Hidráulica) no mesmo horário: aviso (não erro)
     d.grade.alocacoes = [{ disc: 'secag', d: 1, h: 6, sala: 's101' }, { disc: 'hidr', d: 1, h: 6, sala: 's102' }];
     const c = N.conflitos(d).lista.find((x) => x.tipo === 'prof');
-    ok(c && c.msg.startsWith('Elisa Martins (exemplo) tem duas aulas'), c && c.msg);
-    // indisponibilidade da regente (quarta de manhã)
+    ok(c && c.msg.startsWith('Elisa Martins (exemplo) tem duas aulas') && c.gravidade === 'aviso', c && c.msg);
+    // indisponibilidade da regente (quarta de manhã), com o responsável disponível: aviso
     d.grade.alocacoes = [{ disc: 'secag', d: 2, h: 0, sala: 's101' }];
-    ok(N.conflitos(d).lista.some((x) => x.tipo === 'prof-indisp' && x.msg.startsWith('Elisa')));
-    // laboratório: regente sem autorização gera conflito
-    d.grade.alocacoes = [{ disc: 'secag', d: 1, h: 6, sala: 'lpc' }];
-    ok(N.conflitos(d).lista.some((x) => x.tipo === 'lab-permissao' && x.msg.includes('Elisa')));
+    igual(N.conflitos(d).lista.filter((x) => x.tipo === 'prof-indisp').map((x) => [x.msg.slice(0, 5), x.gravidade]), [['Elisa', 'aviso']]);
+    // laboratório: regente sem autorização = aviso; responsável sem autorização = erro
+    d.grade.alocacoes = [{ disc: 'secag', d: 1, h: 6, sala: 'lia' }];
+    igual(N.conflitos(d).lista.filter((x) => x.tipo === 'lab-permissao').map((x) => [x.msg.includes('Elisa') ? 'Elisa' : 'Bruno', x.gravidade]).sort(), [['Bruno', 'erro'], ['Elisa', 'aviso']]);
     // carga horária: os dois contam as horas
     d.grade.alocacoes = [{ disc: 'secag', d: 1, h: 6, sala: 's101' }, { disc: 'secag', d: 1, h: 7, sala: 's101' }];
     const v = P.horasProfessores(d, 'curso');
@@ -606,6 +606,53 @@ teste('Regentes: responsável e regentes dão aula juntos (gerador, conflitos, l
     // excluir a regente tira ela da disciplina
     N.excluir(d, 'professor', 'elisa');
     igual(d.disciplinas.find((x) => x.id === 'secag').regentes, []);
+});
+
+teste('Colisões de professor: responsável × responsável = erro; responsável × regente = aviso; regente × regente = aviso leve', () => {
+    const d = comGradeUm(1);
+    const calc2 = d.disciplinas.find((q) => q.id === 'calc2'), tcc = d.disciplinas.find((q) => q.id === 'tcc'), empr = d.disciplinas.find((q) => q.id === 'empr');
+    // Ana é responsável por Cálculo I, Cálculo II e TCC
+    d.grade.alocacoes = [{ disc: 'calc1', d: 1, h: 0, sala: 's101' }, { disc: 'calc2', d: 1, h: 0, sala: 's102' }];
+    igual(N.conflitos(d).lista.filter((x) => x.tipo === 'prof').map((x) => x.gravidade), ['erro']);
+    // Marlon regente de Cálculo II, responsável por Eletrotécnica
+    calc2.regentes = ['marlon'];
+    d.grade.alocacoes = [{ disc: 'calc2', d: 1, h: 0, sala: 's101' }, { disc: 'eletrot', d: 1, h: 0, sala: 's102' }];
+    igual(N.conflitos(d).lista.filter((x) => x.tipo === 'prof').map((x) => [x.msg.slice(0, 6), x.gravidade]), [['Marlon', 'aviso']]);
+    // Marlon regente em Cálculo II e em Empreendedorismo: só regência = aviso leve
+    empr.regentes = ['marlon'];
+    d.grade.alocacoes = [{ disc: 'calc2', d: 1, h: 0, sala: 's101' }, { disc: 'empr', d: 1, h: 0, sala: 's102' }];
+    const c = N.conflitos(d);
+    igual(c.lista.filter((x) => x.tipo === 'prof').map((x) => [x.msg.slice(0, 6), x.gravidade]), [['Marlon', 'leve']]);
+    igual([c.erros, c.leves >= 1], [c.lista.filter((x) => x.gravidade === 'erro').length, true]);
+    ok(c.lista.find((x) => x.gravidade === 'leve').msg.includes('regente nas duas'));
+});
+
+teste('Gerador: regente não bloqueia (indisponível a semana toda: a disciplina entra mesmo assim, com aviso); responsável bloqueia', () => {
+    const d = exemploUm();
+    d.professores.find((p) => p.id === 'elisa').indisp = N.todasChaves(d.config); // regente da Secagem sem horário nenhum
+    const r = N.gerar(d, { semente: 2 });
+    igual(r.alocacoes.filter((a) => a.disc === 'secag').length, 4);
+    d.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+    const c = N.conflitos(d);
+    igual(c.lista.filter((x) => x.tipo === 'prof-indisp' && x.gravidade === 'erro' && x.msg.startsWith('Elisa') && x.msg.includes('Secagem')).length, 0);
+    ok(c.lista.some((x) => x.tipo === 'prof-indisp' && x.gravidade === 'aviso' && x.msg.includes('Secagem')));
+    const d2 = exemploUm();
+    d2.professores.find((p) => p.id === 'bruno').indisp = N.todasChaves(d2.config); // responsável sem horário: não entra
+    const r2 = N.gerar(d2, { semente: 2, tentativas: 3 });
+    ok(r2.naoAlocadas.some((x) => x.disc === 'secag'));
+});
+
+teste('Gerador: com regentes, nunca põe o mesmo responsável em duas aulas e evita colisões de regência quando dá', () => {
+    for (let s = 1; s <= 10; s++) {
+        const d = exemploUm();
+        // disciplinas só deste curso (sem turma conjunta com outro curso, que tem horário já marcado lá)
+        d.disciplinas.find((q) => q.id === 'alg-ea').regentes = ['marlon'];
+        d.disciplinas.find((q) => q.id === 'secag').regentes = ['elisa', 'marlon'];
+        const r = N.gerar(d, { semente: s }); d.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+        const c = N.conflitos(d);
+        igual(c.lista.filter((x) => x.tipo === 'prof' && x.gravidade === 'erro').length, 0, `semente ${s}`);
+        igual(c.lista.filter((x) => x.tipo === 'prof').length, 0, `semente ${s}: havia horário sem colisão`);
+    }
 });
 
 teste('Arquivo: normalizar completa campos faltando', () => {

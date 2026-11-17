@@ -112,7 +112,7 @@ const GeradorPDF = (() => {
             doc.text(txt(`${cfg.ano}/${cfg.metade} (${cfg.metade}º semestre do ano): disciplinas dos semestres ${cfg.metade === 1 ? 'ímpares' : 'pares'} do curso são OFERTA e as dos ${cfg.metade === 1 ? 'pares' : 'ímpares'} são REOFERTA.`), 10, 46);
             const total = D.disciplinas.reduce((s, q) => s + (Number(q.aulas) || 0), 0);
             const falt = N.faltando(D).reduce((s, x) => s + x.faltam, 0);
-            doc.text(txt(`${alocs.length} de ${total} aulas na grade · ${c.erros} conflito(s) · ${c.avisos} aviso(s) · ${falt} aula(s) sem lugar.`), 10, 52);
+            doc.text(txt(`${alocs.length} de ${total} aulas na grade · ${c.erros} erro(s) · ${c.avisos} aviso(s) · ${c.leves} aviso(s) leve(s) · ${falt} aula(s) sem lugar.`), 10, 52);
             doc.text(txt(`Dias: ${cfg.dias.join(', ')}. Horários: ${cfg.horarios[0].ini} às ${cfg.horarios[cfg.horarios.length - 1].fim} (${cfg.horarios.length} aulas por dia).`), 10, 58);
             doc.autoTable({
                 startY: 64, margin: { left: 10, right: 10 },
@@ -227,9 +227,9 @@ const GeradorPDF = (() => {
             doc.autoTable({
                 startY: 25, margin: { left: 10, right: 10, bottom: 12 },
                 head: [['Tipo', 'Descrição']],
-                body: c.lista.length ? c.lista.map((x) => [x.gravidade === 'erro' ? 'Conflito' : 'Aviso', txt(x.msg)]) : [['—', 'Nenhum conflito.']],
+                body: c.lista.length ? c.lista.map((x) => [({ erro: 'Erro', aviso: 'Aviso', leve: 'Aviso leve' })[x.gravidade], txt(x.msg)]) : [['—', 'Nenhum conflito.']],
                 theme: 'grid', headStyles: { fillColor: VERDE }, styles: { fontSize: 8 }, columnStyles: { 0: { cellWidth: 22 } },
-                didParseCell: (h) => { if (h.section === 'body' && h.row.raw[0] === 'Conflito') h.cell.styles.fillColor = VERMELHO_CLARO; }
+                didParseCell: (h) => { if (h.section === 'body' && h.row.raw[0] === 'Erro') h.cell.styles.fillColor = VERMELHO_CLARO; if (h.section === 'body' && h.row.raw[0] === 'Aviso') h.cell.styles.fillColor = AMARELO_CLARO; }
             });
             const falt = N.faltando(D);
             const motivos = {};

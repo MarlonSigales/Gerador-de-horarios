@@ -11,6 +11,7 @@
 (() => {
     const N = Nucleo;
     const CHAVE_LOCAL = 'gerador-horarios-v1';
+    const SIMB = { erro: '⚠', aviso: '•', leve: '·' }; // erro (vermelho), aviso (amarelo), aviso leve (azul)
     const $ = (s, el = document) => el.querySelector(s);
     const $$ = (s, el = document) => [...el.querySelectorAll(s)];
     const esc = (t) => String(t === undefined || t === null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -433,6 +434,7 @@
         $('#grade-resumo').innerHTML = `<span class="selo"><b>${D.grade.alocacoes.length}</b> de ${total} aulas na grade</span>
             <span class="selo ${c.erros ? 'erro' : 'ok'}"><b>${c.erros}</b> conflito${c.erros === 1 ? '' : 's'}</span>
             ${c.avisos ? `<span class="selo aviso"><b>${c.avisos}</b> aviso${c.avisos === 1 ? '' : 's'}</span>` : ''}
+            ${c.leves ? `<span class="selo leve" title="Colisões só de regência (o regente apoia mais de uma disciplina)"><b>${c.leves}</b> aviso${c.leves === 1 ? '' : 's'} leve${c.leves === 1 ? '' : 's'}</span>` : ''}
             ${falt ? `<span class="selo aviso"><b>${falt}</b> sem lugar</span>` : ''}`;
         $('#btn-editar').classList.toggle('ativo', ui.editando);
         $('#btn-editar').textContent = ui.editando ? '✔ Concluir edição' : '✏️ Editar';
@@ -473,7 +475,7 @@
             const discs = [...new Set(indices.map((i) => alocs[i].disc))].map((id) => D.disciplinas.find((x) => x.id === id));
             const q = discs[0];
             const cs = [...new Set(indices.flatMap((i) => c.porAloc[i] || []))];
-            const erro = cs.some((x) => x.gravidade === 'erro'), avis = cs.length && !erro;
+            const erro = cs.some((x) => x.gravidade === 'erro'), avis = !erro && cs.some((x) => x.gravidade === 'aviso'), leve = cs.length && !erro && !avis;
             const turmas = discs.flatMap((x) => x.ofertas.map((o) => `${N.sigla(N.nomeDe(D.cursos, o.curso))} ${o.semestre}º`));
             const profsQ = N.professoresDe(q).map((p) => N.nomeDe(D.professores, p));
             const prof = profsQ.length ? profsQ[0] + (profsQ.length > 1 ? ` +${profsQ.length - 1}` : '') : 'sem professor';
@@ -482,9 +484,9 @@
             const ofertaCurso = ui.visao === 'curso' ? q.ofertas.find((o) => o.curso === ui.item && Number(o.semestre) === Number(ui.semestre)) : null;
             const sit = sitVisao || (q.ofertas.length && q.ofertas.every((o) => N.situacao(o.semestre, cfg.metade) === 'reoferta') ? 'reoferta' : 'oferta');
             const titulo = [discs.map((x) => N.nomeDisc(x)).join(' / ') + (discs.length > 1 ? ' (equivalentes)' : ''), `Professor${profsQ.length > 1 ? 'es' : ''}: ${profsQ.join(', ') || 'sem professor'}${profsQ.length > 1 ? ' (o 1º é o responsável)' : ''}`, `Sala: ${sala}`, `Turmas: ${turmas.join(', ')}`, `Horários (código): ${N.codigosDisciplina(D, q.id)}`,
-                a.travada ? 'Fixada (o Aleatorizar não mexe)' : '', ...cs.map((x) => `${x.gravidade === 'erro' ? '⚠' : '•'} ${x.msg}`)].filter(Boolean).join('\n');
+                a.travada ? 'Fixada (o Aleatorizar não mexe)' : '', ...cs.map((x) => `${SIMB[x.gravidade]} ${x.msg}`)].filter(Boolean).join('\n');
             const sel = ui.sel && indices.some((i) => ui.sel.includes(i));
-            return `<div class="aula ${sit}${ofertaCurso && ofertaCurso.carater !== 'obrigatoria' ? ' optativa' : ''}${erro ? ' conflito-erro' : ''}${avis ? ' conflito-aviso' : ''}${sel ? ' selecionada' : ''}${indices.some((i) => ui.destaque.has(i)) ? ' piscar' : ''}"
+            return `<div class="aula ${sit}${ofertaCurso && ofertaCurso.carater !== 'obrigatoria' ? ' optativa' : ''}${erro ? ' conflito-erro' : ''}${avis ? ' conflito-aviso' : ''}${leve ? ' conflito-leve' : ''}${sel ? ' selecionada' : ''}${indices.some((i) => ui.destaque.has(i)) ? ' piscar' : ''}"
                 data-i="${indices[0]}" title="${esc(titulo)}"${ui.editando ? ' draggable="true"' : ''}>
                 ${cs.length ? `<span class="alerta">⚠</span>` : ''}<b>${esc(discs.map((x) => x.codigo || x.nome.slice(0, 8)).join('/'))}</b>${a.travada ? ' 🔒' : ''}
                 <span class="nome">${esc(q.nome)}</span><small>${esc(linha2)}</small></div>`;
@@ -500,7 +502,7 @@
             }).join('')}</tr>`).join('')}</tbody></table>`;
         $('#legenda').innerHTML = `<span><i style="background:var(--verde-claro);border-left:4px solid var(--verde)"></i>oferta</span>
             <span><i style="background:#fffaf0;border-left:4px solid var(--amarelo)"></i>reoferta</span>
-            <span><i style="background:#fdecea;border-color:var(--perigo)"></i>conflito (passe o mouse para ver)</span>
+            <span><i style="background:#fdecea;border-color:var(--perigo)"></i>erro</span><span><i style="background:#fff;box-shadow:0 0 0 2px #e8c35a"></i>aviso</span><span><i style="background:#fff;box-shadow:0 0 0 2px #8cb8e0"></i>aviso leve (só regência) — passe o mouse para ver</span>
             <span><i style="background:repeating-linear-gradient(45deg,#f6f8f8,#f6f8f8 3px,#e3e9e8 3px,#e3e9e8 6px)"></i>${{ curso: 'fora do funcionamento do curso', professor: 'professor indisponível', sala: 'sala indisponível' }[ui.visao]}</span>
             ${ui.visao !== 'curso' ? '<span><i style="background:#f1eafc;border-color:#c9b3ef"></i>reservado para pesquisa</span>' : ''}
             <span>🔒 fixada (o Aleatorizar não mexe)</span>
@@ -536,15 +538,16 @@
     /** Pinta as células de destino conforme os conflitos que o movimento causaria. */
     function pintarAlvos() {
         const tds = $$('#grade-wrap td[data-d]');
-        tds.forEach((td) => { td.classList.remove('alvo-ok', 'alvo-aviso', 'alvo-erro', 'alvo-invalido'); td.removeAttribute('data-alvo'); });
+        tds.forEach((td) => { td.classList.remove('alvo-ok', 'alvo-aviso', 'alvo-leve', 'alvo-erro', 'alvo-invalido'); td.removeAttribute('data-alvo'); });
         if (!ui.editando || (!ui.sel && !ui.ins)) return;
         tds.forEach((td) => {
             const d = Number(td.dataset.d), h = Number(td.dataset.h);
             const r = avaliar(d, h);
             if (!r.valido) { td.classList.add('alvo-invalido'); td.title = 'Não cabe aqui (o bloco passaria do fim do turno).'; return; }
             const erro = r.conflitos.some((x) => x.gravidade === 'erro');
-            td.classList.add(erro ? 'alvo-erro' : (r.conflitos.length ? 'alvo-aviso' : 'alvo-ok'));
-            td.title = r.conflitos.length ? 'Se colocar aqui:\n' + r.conflitos.map((x) => `${x.gravidade === 'erro' ? '⚠' : '•'} ${x.msg}`).join('\n') : 'Sem conflito aqui.';
+            const avisoS = r.conflitos.some((x) => x.gravidade === 'aviso');
+            td.classList.add(erro ? 'alvo-erro' : (avisoS ? 'alvo-aviso' : (r.conflitos.length ? 'alvo-leve' : 'alvo-ok')));
+            td.title = r.conflitos.length ? 'Se colocar aqui:\n' + r.conflitos.map((x) => `${SIMB[x.gravidade]} ${x.msg}`).join('\n') : 'Sem conflito aqui.';
         });
     }
     function avaliar(d, h) {
@@ -629,10 +632,11 @@
 
     function renderConflitos(c) {
         const ul = $('#lista-conflitos');
-        $('#conflitos-conta').textContent = `${c.erros} erro${c.erros === 1 ? '' : 's'} · ${c.avisos} aviso${c.avisos === 1 ? '' : 's'}`;
+        $('#conflitos-conta').textContent = `${c.erros} erro${c.erros === 1 ? '' : 's'} · ${c.avisos} aviso${c.avisos === 1 ? '' : 's'} · ${c.leves} leve${c.leves === 1 ? '' : 's'}`;
         const novosTxt = new Set(ui.novos.map((x) => x.msg));
-        const lista = c.lista.slice().sort((a, b) => (novosTxt.has(b.msg) - novosTxt.has(a.msg)) || (a.gravidade === 'erro' ? -1 : 1) - (b.gravidade === 'erro' ? -1 : 1));
-        ul.innerHTML = lista.length ? lista.map((x) => `<li class="${x.gravidade}${novosTxt.has(x.msg) ? ' novo' : ''}" data-alocs="${x.alocs.join(',')}" data-tipo="${x.tipo}" title="Clique para ver na grade">${x.gravidade === 'erro' ? '⚠' : '•'} ${esc(x.msg)}</li>`).join('')
+        const ordemG = { erro: 0, aviso: 1, leve: 2 };
+        const lista = c.lista.slice().sort((a, b) => (novosTxt.has(b.msg) - novosTxt.has(a.msg)) || ordemG[a.gravidade] - ordemG[b.gravidade]);
+        ul.innerHTML = lista.length ? lista.map((x) => `<li class="${x.gravidade}${novosTxt.has(x.msg) ? ' novo' : ''}" data-alocs="${x.alocs.join(',')}" data-tipo="${x.tipo}" title="Clique para ver na grade">${SIMB[x.gravidade]} ${esc(x.msg)}</li>`).join('')
             : `<li class="aviso" style="border-left-color:var(--verde);background:#eef7e3;cursor:default">${D.grade.alocacoes.length ? '✓ Nenhum conflito.' : 'A grade está vazia: clique em Aleatorizar.'}</li>`;
         ui.novos = [];
     }
@@ -956,7 +960,7 @@
                 const mover = $('[name=mover]', dlg) && $('[name=mover]', dlg).value;
                 const r = mover ? N.avaliarMovimento(D, mover.split(',').map(Number), d, h, sala) : (() => { const x = N.inserirBloco(D, id, n, d, h, sala); if (!x) return { valido: false, conflitos: [] }; const set = new Set(x.indices); return { valido: true, conflitos: N.conflitos(x.dados).lista.filter((c) => c.alocs.some((i) => set.has(i))) }; })();
                 $('[data-previa]', dlg).innerHTML = !r.valido ? '<p style="color:var(--perigo)">Não cabe aqui: o bloco passaria do fim do turno.</p>'
-                    : r.conflitos.length ? `<p><b style="color:var(--perigo)">⚠ ${r.conflitos.length} conflito(s) se colocar aqui:</b></p><ul>${r.conflitos.map((c) => `<li>${esc(c.msg)}</li>`).join('')}</ul><small>Dá para colocar mesmo assim; os conflitos ficam marcados na grade.</small>`
+                    : r.conflitos.length ? `<p><b style="color:${r.conflitos.some((c) => c.gravidade === 'erro') ? 'var(--perigo)' : '#7a5a00'}">${r.conflitos.some((c) => c.gravidade === 'erro') ? '⚠' : '•'} ${r.conflitos.length} conflito(s)/aviso(s) se colocar aqui:</b></p><ul>${r.conflitos.map((c) => `<li>${({ erro: '<b>erro</b>', aviso: 'aviso', leve: 'aviso leve' })[c.gravidade]}: ${esc(c.msg)}</li>`).join('')}</ul><small>Dá para colocar mesmo assim; os conflitos ficam marcados na grade.</small>`
                         : '<p style="color:#3d6b12"><b>✓ Sem conflito aqui.</b> A aula fica fixada (o Aleatorizar não mexe).</p>';
             };
             $('[name=disc]', dlg).addEventListener('change', () => { delete $('[name=n]', dlg).dataset.mexido; atualiza(); });

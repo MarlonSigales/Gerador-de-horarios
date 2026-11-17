@@ -17,8 +17,11 @@
  *    na metade 1 do ano os semestres ímpares são oferta e os pares são reoferta (na metade 2, o contrário);
  *  - cada curso tem disciplinas obrigatórias, optativas e livres (caráter da disciplina naquele curso);
  *  - no mesmo semestre de um curso não pode haver duas aulas no mesmo horário (qualquer caráter);
- *  - cada disciplina tem um professor responsável e pode ter vários regentes (disciplina.regentes); todos dão aula, então
- *    todos ficam ocupados nos horários da disciplina; cada laboratório tem um ou mais responsáveis;
+ *  - cada disciplina tem um professor responsável e pode ter vários regentes (disciplina.regentes); todos dão aula, mas o
+ *    regente pode apoiar várias disciplinas: colisão só de regência = aviso leve; regência × responsável = aviso;
+ *    responsável × responsável = erro. Regente indisponível (com o responsável disponível) = aviso. O gerador só
+ *    bloqueia o responsável; para os regentes, evita colisões quando dá;
+ *  - cada laboratório tem um ou mais responsáveis;
  *  - cada arquivo é a grade de UM curso (dados.cursos tem um curso só), de uma unidade (config.unidade);
  *  - cada unidade é autônoma: professores só se bloqueiam entre cursos da mesma unidade; salas nunca podem conflitar;
  *  - cada curso pode preferir turnos por semestre (curso.preferencias: {semestre: ['manha', ...]}): o gerador tenta;
@@ -299,7 +302,14 @@ const Nucleo = (() => {
                     if (!(minutos(h.ini) < a1 && a0 < minutos(h.fim))) return;
                     const k = chave(d, j);
                     const x = salaPorNome[normNome(au.sala)];
-                    if (mesmaUnidade) [...new Set((au.professores && au.professores.length ? au.professores : [au.professor]).map((nm) => profPorNome[normNome(nm)]).filter(Boolean))].forEach((p) => poe(prof, p, k, info));
+                    if (mesmaUnidade) {
+                        const vistosP = new Set();
+                        (au.professores && au.professores.length ? au.professores : [au.professor]).forEach((nm) => {
+                            const p = profPorNome[normNome(nm)];
+                            if (!p || vistosP.has(p)) return; vistosP.add(p);
+                            poe(prof, p, k, Object.assign({}, info, { papel: normNome(nm) === normNome(au.professor) ? 'resp' : 'reg' })); // papel lá: responsável ou regente
+                        });
+                    }
                     if (x) poe(sala, x, k, info);
                 });
             });
@@ -567,6 +577,10 @@ const Nucleo = (() => {
 
     // ================================================================ CONFLITOS
 
+    /** Gravidade da colisão de um professor entre duas aulas: responsável nas duas = erro; numa = aviso; regente nas duas = leve. */
+    function gravidadeColisao(respA, respB) { return respA && respB ? 'erro' : (respA || respB ? 'aviso' : 'leve'); }
+    const DESC_PAPEL = { erro: 'responsável nas duas', aviso: 'responsável numa e regente na outra', leve: 'regente nas duas' };
+
     /**
      * Lista todos os conflitos da grade.
      * Cada conflito: { tipo, gravidade: 'erro'|'aviso', msg, alocs: [índices em grade.alocacoes] }.
@@ -592,21 +606,25 @@ const Nucleo = (() => {
             const profsD = professoresDe(disc).map((p) => idx.prof[p]).filter(Boolean);
             const prof = idx.prof[disc.professor], sala = idx.sala[a.sala];
             if (!sala) add('sala', 'erro', `${nomeDisc(disc)} em ${onde}: sem sala (ou sala removida).`, [i]);
-            profsD.forEach((pr) => { if ((pr.indisp || []).includes(k)) add('prof-indisp', 'erro', `${pr.nome} não pode dar aula em ${onde} (${nomeDisc(disc)}).`, [i]); });
+            const ehResp = (pr) => pr.id === disc.professor; // responsável: erro; regente (com o responsável dando a aula): aviso
+            const grav = (pr) => (ehResp(pr) ? 'erro' : 'aviso');
+            const papelTxt = (pr) => (ehResp(pr) ? '' : ' — é regente; o responsável dá a aula');
+            profsD.forEach((pr) => { if ((pr.indisp || []).includes(k)) add('prof-indisp', grav(pr), `${pr.nome} não pode dar aula em ${onde} (${nomeDisc(disc)})${papelTxt(pr)}.`, [i]); });
             if (sala && (sala.pesquisa || []).includes(k)) add('pesquisa-sala', 'erro', `${sala.nome} está reservada para pesquisa em ${onde} (${nomeDisc(disc)}).`, [i]);
-            profsD.forEach((pr) => { if ((pr.pesquisa || []).includes(k)) add('pesquisa-prof', 'erro', `${pr.nome} tem horário reservado para pesquisa em ${onde} (${nomeDisc(disc)}).`, [i]); });
+            profsD.forEach((pr) => { if ((pr.pesquisa || []).includes(k)) add('pesquisa-prof', grav(pr), `${pr.nome} tem horário reservado para pesquisa em ${onde} (${nomeDisc(disc)})${papelTxt(pr)}.`, [i]); });
             if (sala && (sala.indisp || []).includes(k)) add('sala-indisp', 'erro', `${sala.nome} não pode ser usada em ${onde} (${nomeDisc(disc)}).`, [i]);
             if ((disc.fixos || []).length && !disc.fixos.includes(k)) add('fixo', 'erro', `${nomeDisc(disc)} só pode ocorrer nos horários fixos dela; está em ${onde}.`, [i]);
             const jan = janelaCursos(dados, disc, idx);
             if (jan && !jan.has(k)) add('curso', 'erro', `${nomeDisc(disc)} em ${onde}: fora do horário de funcionamento do(s) curso(s) para ${turmasDe(dados, disc).map((t) => t.situacao).filter((v, j, s) => s.indexOf(v) === j).join('/')}.`, [i]);
             if (sala) profsD.filter((pr) => !profPodeNaSala(sala, pr.id)).forEach((pr) => {
-                add('lab-permissao', 'erro', `${sala.nome}: ${pr.nome} não está autorizado pelo(s) responsável(is) (${(sala.responsaveis || []).map((p) => nomeDe(dados.professores, p)).join(', ') || 'sem responsável'}).`, [i]);
+                add('lab-permissao', grav(pr), `${sala.nome}: ${pr.nome}${ehResp(pr) ? '' : ' (regente)'} não está autorizado pelo(s) responsável(is) (${(sala.responsaveis || []).map((p) => nomeDe(dados.professores, p)).join(', ') || 'sem responsável'}).`, [i]);
             });
             const vistos = new Set();
             profsD.forEach((pr) => (((ext.prof[pr.id] || {})[k]) || []).forEach((info) => {
                 if (conjunta(info, disc, sala && sala.nome) || vistos.has('p' + pr.id + info.curso + info.codigo)) return;
                 vistos.add('p' + pr.id + info.curso + info.codigo);
-                add('externo-prof', 'erro', `${pr.nome} já tem aula em ${info.curso} em ${onde} (${info.codigo ? info.codigo + ' ' : ''}${info.disciplina}${info.sala ? ', ' + info.sala : ''}).`, [i]);
+                const g = gravidadeColisao(ehResp(pr), info.papel !== 'reg');
+                add('externo-prof', g, `${pr.nome} já tem aula em ${info.curso} em ${onde} (${info.codigo ? info.codigo + ' ' : ''}${info.disciplina}${info.sala ? ', ' + info.sala : ''}) — ${DESC_PAPEL[g]}.`, [i]);
             }));
             if (sala) (((ext.sala[sala.id] || {})[k]) || []).forEach((info) => {
                 if ((info.codigo && normNome(info.codigo) === normNome(disc.codigo)) || vistos.has('s' + info.curso + info.codigo)) return;
@@ -629,7 +647,8 @@ const Nucleo = (() => {
                 if (mesmaTurma) continue;
                 const pb = professoresDe(db);
                 professoresDe(da).filter((p) => pb.includes(p)).forEach((p) => {
-                    add('prof', 'erro', `${nomeDe(dados.professores, p)} tem duas aulas em ${onde}: ${nomeDisc(da)} e ${nomeDisc(db)}.`, [quais[x], quais[y]]);
+                    const g = gravidadeColisao(da.professor === p, db.professor === p);
+                    add('prof', g, `${nomeDe(dados.professores, p)} tem duas aulas em ${onde}: ${nomeDisc(da)} e ${nomeDisc(db)} (${DESC_PAPEL[g]}).`, [quais[x], quais[y]]);
                 });
                 if (a.sala && a.sala === b.sala) {
                     const sala = idx.sala[a.sala];
@@ -658,7 +677,7 @@ const Nucleo = (() => {
 
         const porAloc = {};
         lista.forEach((c) => c.alocs.forEach((i) => { (porAloc[i] = porAloc[i] || []).push(c); }));
-        return { lista, porAloc, erros: lista.filter((c) => c.gravidade === 'erro').length, avisos: lista.filter((c) => c.gravidade === 'aviso').length };
+        return { lista, porAloc, erros: lista.filter((c) => c.gravidade === 'erro').length, avisos: lista.filter((c) => c.gravidade === 'aviso').length, leves: lista.filter((c) => c.gravidade === 'leve').length };
     }
 
     // ================================================================ EDIÇÃO
@@ -742,6 +761,8 @@ const Nucleo = (() => {
         const unidades = Object.entries(eq.grupos).map(([lider, ids]) => {
             const discs = ids.map((i) => idx.disc[i]);
             const profs = [...new Set(discs.flatMap((d) => professoresDe(d)))];
+            const resps = [...new Set(discs.map((d) => d.professor).filter(Boolean))]; // bloqueio rígido só para o responsável
+            const regs = profs.filter((p) => !resps.includes(p)); // regentes: o gerador evita colisões quando dá
             // salas: interseção das listas não vazias; se todas vazias, salas comuns
             let salas = null;
             discs.forEach((d) => {
@@ -750,7 +771,8 @@ const Nucleo = (() => {
                 salas = salas === null ? s : new Set([...salas].filter((x) => s.has(x)));
             });
             salas = salas === null ? salasPermitidas(dados, discs[0]) : [...salas];
-            salas = salas.filter((s) => profs.every((p) => profPodeNaSala(idx.sala[s], p)));
+            salas = salas.filter((s) => resps.every((p) => profPodeNaSala(idx.sala[s], p)));
+            const salaRegNao = new Set(salas.filter((s) => regs.some((p) => !profPodeNaSala(idx.sala[s], p)))); // lab sem autorização do regente: evitar
             // horários permitidos estáticos: fixos ∩ janela dos cursos ∩ disponibilidade dos professores
             let permitidos = new Set(todas);
             let semJanela = false;
@@ -760,7 +782,8 @@ const Nucleo = (() => {
                 if (jan) { if (!jan.size) semJanela = true; permitidos = new Set([...permitidos].filter((k) => jan.has(k))); }
             });
             const antesProf = permitidos.size;
-            profs.forEach((p) => { const ind = new Set([...((idx.prof[p] && idx.prof[p].indisp) || []), ...((idx.prof[p] && idx.prof[p].pesquisa) || [])]); permitidos = new Set([...permitidos].filter((k) => !ind.has(k))); });
+            resps.forEach((p) => { const ind = new Set([...((idx.prof[p] && idx.prof[p].indisp) || []), ...((idx.prof[p] && idx.prof[p].pesquisa) || [])]); permitidos = new Set([...permitidos].filter((k) => !ind.has(k))); });
+            const regIndisp = new Set(regs.flatMap((p) => [...((idx.prof[p] && idx.prof[p].indisp) || []), ...((idx.prof[p] && idx.prof[p].pesquisa) || [])]));
             const turmas = [], turmasTodas = [];
             discs.forEach((d) => turmasDe(dados, d).forEach((t) => {
                 if (!turmas.includes(t.id)) turmas.push(t.id); // regra: mesmo semestre não tem duas aulas no mesmo horário
@@ -774,10 +797,11 @@ const Nucleo = (() => {
             const prioridade = salas.some((s) => idx.sala[s] && idx.sala[s].tipo === 'laboratorio' && profs.some((p) => (idx.sala[s].responsaveis || []).includes(p))) ? 0 : 1;
             // outros cursos: horários em que o professor já está ocupado (bloqueio) ou em turma conjunta da mesma disciplina
             const codigos = new Set(discs.map((d) => normNome(d.codigo)).filter(Boolean));
-            const profBloq = new Set(), profConj = {}, salaBloq = {};
+            const profBloq = new Set(), profConj = {}, salaBloq = {}, profSoft = new Set();
             profs.forEach((p) => Object.entries(ext.prof[p] || {}).forEach(([k, infos]) => infos.forEach((info) => {
                 if (info.codigo && codigos.has(normNome(info.codigo))) (profConj[k] = profConj[k] || new Set()).add(normNome(info.sala));
-                else profBloq.add(k);
+                else if (resps.includes(p) && info.papel !== 'reg') profBloq.add(k); // responsável lá e cá: erro, bloqueia
+                else profSoft.add(k); // envolve regência: evitar quando dá
             })));
             salas.forEach((x) => Object.entries(ext.sala[x] || {}).forEach(([k, infos]) => infos.forEach((info) => {
                 if (!(info.codigo && codigos.has(normNome(info.codigo)))) (salaBloq[x] = salaBloq[x] || new Set()).add(k);
@@ -786,7 +810,7 @@ const Nucleo = (() => {
             discs.forEach((d) => { const p = turnosPreferidos(dados, d); if (p) pref = pref === null ? p : new Set([...pref].filter((t) => p.has(t))); });
             const descTurmas = [];
             discs.forEach((d) => turmasDe(dados, d).forEach((t) => descTurmas.push(`${nomeDe(dados.cursos, t.curso)} (${t.semestre}º, ${t.situacao})`)));
-            return { lider, ids, profs, salas, permitidos, turmas, turmasTodas, profBloq, profConj, salaBloq, pref, blocos: bl, prioridade, fixos: discs.some((d) => (d.fixos || []).length), semJanela, antesProf, descTurmas };
+            return { lider, ids, profs, resps, regs, salaRegNao, regIndisp, profSoft, salas, permitidos, turmas, turmasTodas, profBloq, profConj, salaBloq, pref, blocos: bl, prioridade, fixos: discs.some((d) => (d.fixos || []).length), semJanela, antesProf, descTurmas };
         }).filter((u) => u.blocos.length);
 
         let melhor = null;
@@ -799,13 +823,13 @@ const Nucleo = (() => {
         return melhor;
 
         function tentativa(unids) {
-            const profOc = {}, salaOc = {}, turmaOc = {}, turmaTodasOc = {};
+            const profOc = {}, profRegOc = {}, salaOc = {}, turmaOc = {}, turmaTodasOc = {}; // profOc: como responsável; profRegOc: como regente
             const ocupa = (mapa, id, k) => { (mapa[id] = mapa[id] || new Set()).add(k); };
             const livre = (mapa, id, k) => !(mapa[id] && mapa[id].has(k));
             const alocacoes = travadas.map((a) => copia(a));
             alocacoes.forEach((a) => {
                 const d = idx.disc[a.disc], k = chave(a.d, a.h);
-                professoresDe(d).forEach((p) => ocupa(profOc, p, k));
+                professoresDe(d).forEach((p) => ocupa(p === d.professor ? profOc : profRegOc, p, k));
                 ocupa(salaOc, a.sala, k);
                 turmasDe(dados, d).forEach((tu) => { ocupa(turmaOc, tu.id, k); ocupa(turmaTodasOc, tu.id, k); });
             });
@@ -827,7 +851,7 @@ const Nucleo = (() => {
                             for (let h = h0; h < h0 + n; h++) {
                                 const k = chave(d, h);
                                 if (!u.permitidos.has(k) || u.profBloq.has(k) || (h < h0 + n - 1 && !seguidas(cfg, h))
-                                    || !u.profs.every((p) => livre(profOc, p, k)) || !u.turmas.every((tu) => livre(turmaOc, tu, k))) { okH = false; break; }
+                                    || !u.resps.every((p) => livre(profOc, p, k)) || !u.turmas.every((tu) => livre(turmaOc, tu, k))) { okH = false; break; }
                             }
                             if (!okH) continue;
                             u.salas.forEach((s) => {
@@ -843,7 +867,12 @@ const Nucleo = (() => {
                                 for (let h = h0; h < h0 + n && !choqueLeve; h++) { const k = chave(d, h); choqueLeve = u.turmasTodas.some((tu) => !livre(turmaTodasOc, tu, k)); }
                                 let noTurno = true;
                                 if (u.pref && u.pref.size) for (let h = h0; h < h0 + n; h++) if (!u.pref.has(turno(cfg.horarios[h]))) noTurno = false;
-                                const c = { d, h0, s, choqueLeve, conj, noTurno };
+                                let regOk = !u.salaRegNao.has(s); // regentes livres, disponíveis e autorizados: preferido
+                                for (let h = h0; h < h0 + n && regOk; h++) {
+                                    const k = chave(d, h);
+                                    if (u.regIndisp.has(k) || u.profSoft.has(k) || !u.resps.every((p) => livre(profRegOc, p, k)) || !u.regs.every((p) => livre(profOc, p, k) && livre(profRegOc, p, k))) regOk = false;
+                                }
+                                const c = { d, h0, s, choqueLeve, conj, noTurno, regOk };
                                 if (diasUsados[u.lider] && diasUsados[u.lider].has(d)) candsMesmoDia.push(c); else cands.push(c);
                             });
                         }
@@ -851,11 +880,13 @@ const Nucleo = (() => {
                     const semChoque = (l) => { const x = l.filter((c) => !c.choqueLeve); return x.length ? x : l; };
                     const conjuntas = [...cands, ...candsMesmoDia].filter((c) => c.conj); // turma conjunta com outro curso: preferida
                     const noTurno = (l) => { const x = l.filter((c) => c.noTurno); return x.length ? x : l; }; // preferência de turno do semestre
-                    const usar = conjuntas.length ? conjuntas : noTurno(semChoque(cands.length ? cands : candsMesmoDia));
+                    const regOk = (l) => { const x = l.filter((c) => c.regOk); return x.length ? x : l; };
+                    const usar = conjuntas.length ? regOk(conjuntas) : noTurno(semChoque(regOk(cands.length ? cands : candsMesmoDia)));
                     if (!usar.length) { naoAlocadas.push({ disc: u.lider, aulas: n, motivo: diagnostico(u, n) }); custo += 1000 * n; return; }
                     if (!cands.length) custo += 1;
                     if (usar[0].choqueLeve) custo += 1;
                     if (!usar[0].noTurno) custo += 1;
+                    if (!usar[0].regOk) custo += 1;
                     // responsáveis preferem o próprio laboratório
                     const proprios = usar.filter((c) => (idx.sala[c.s].responsaveis || []).some((p) => u.profs.includes(p)));
                     const pool = proprios.length && rng() < 0.85 ? proprios : usar;
@@ -863,7 +894,8 @@ const Nucleo = (() => {
                     (diasUsados[u.lider] = diasUsados[u.lider] || new Set()).add(c.d);
                     for (let h = c.h0; h < c.h0 + n; h++) {
                         const k = chave(c.d, h);
-                        u.profs.forEach((p) => ocupa(profOc, p, k));
+                        u.resps.forEach((p) => ocupa(profOc, p, k));
+                        u.regs.forEach((p) => ocupa(profRegOc, p, k));
                         ocupa(salaOc, c.s, k);
                         u.turmas.forEach((tu) => ocupa(turmaOc, tu, k));
                         u.turmasTodas.forEach((tu) => ocupa(turmaTodasOc, tu, k));
@@ -1003,7 +1035,7 @@ const Nucleo = (() => {
         CARATER, POLITICA, DIAS_SEMANA, NOME_TURNO,
         chave, separa, copia, rngSemente, turno, situacao, todasChaves, seguidas, indices, gruposEquivalentes, janelaCursos,
         profPodeNaSala, salasPermitidas, blocos, turmasDe, sigla, professoresDe, nomesProfessores, nomeDisc, nomeDe, rotuloHorario,
-        relatorios, eventosDoCalendario, datasDoPeriodo, CALENDARIO_URL_2027, calendario2027, lerCalendarioTexto, analisarCalendario, NOME_TIPO_CAL, dataBR, codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
+        gravidadeColisao, relatorios, eventosDoCalendario, datasDoPeriodo, CALENDARIO_URL_2027, calendario2027, lerCalendarioTexto, analisarCalendario, NOME_TIPO_CAL, dataBR, codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
         novoId, dadosVazios, horariosPadrao, normalizar, excluir, chavesTurno, remapearConfig
     };
 })();

@@ -250,3 +250,10 @@ table.grade td.pesquisa { background: repeating-linear-gradient(45deg, #f6f1fd, 
 
 #topbar-entrar { flex-shrink: 0; }
 @media (max-width: 600px) { #topbar-entrar .rot { display: none; } #topbar-entrar { padding: .25rem .5rem; margin-left: .3rem !important; } }
+
+.aula.conflito-leve { box-shadow: 0 0 0 2px #8cb8e0; }
+.aula.conflito-leve .alerta { color: #2f6aa3; }
+td.alvo-leve { background: #e6f0fa !important; cursor: pointer; }
+td.alvo-leve:hover { outline: 2px solid var(--teal); outline-offset: -2px; }
+.selo.leve { background: #eaf3fb; border-color: #bcd6ee; } .selo.leve b { color: #2f6aa3; }
+.lista-conflitos li.leve { border-left-color: #8cb8e0; background: #f1f7fc; }
