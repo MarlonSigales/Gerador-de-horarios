@@ -62,7 +62,7 @@ const Exemplo = (() => {
             q('emb1', 'EAG061', 'Eletrônica Embarcada para Agricultura I', 'marlon', 3, '3', ['lia'], [o('eagri', 6, 'optativa')], { fixos: N.chavesTurno(cfg, 'tarde', [3]).slice(2, 5) }),
             q('embsis', 'ECA070', 'Sistemas Embarcados', 'diego', 4, '2+2', ['lia', 'linfo'], [o('ecaut', 7)]),
             q('posc', 'EAG070', 'Pós-Colheita de Grãos', 'bruno', 3, '3', ['lpc'], [o('eagri', 7)]),
-            q('secag', 'EAG071', 'Secagem e Armazenagem', 'bruno', 4, '2+2', [], [o('eagri', 8)]),
+            q('secag', 'EAG071', 'Secagem e Armazenagem', 'bruno', 4, '2+2', [], [o('eagri', 8)], { regentes: ['elisa'] }), // 1 responsável + 1 regente
             q('instal', 'EAG081', 'Projeto de Instalações Elétricas Agroindustriais', 'marlon', 3, '3', [], [o('eagri', 8)]),
             q('energ', 'EAG082', 'Energização Rural', 'marlon', 3, '3', [], [o('eagri', 8)]),
             q('ctrl', 'ECA080', 'Controle e Automação Industrial', 'fabio', 4, '2+2', [], [o('ecaut', 8), o('eagri', 9, 'optativa')]),

@@ -378,7 +378,7 @@ teste('Relatórios internos: carga dos professores (com outros cursos) e uso das
     const d = exemploUm();
     const r0 = N.gerar(d, { semente: 6 }); d.grade.alocacoes = r0.alocacoes;
     const r = N.relatorios(d);
-    const total = d.disciplinas.reduce((t, q) => t + q.aulas, 0); // nesta grade (só Eng. Agrícola) não há par de equivalentes
+    const total = d.disciplinas.reduce((t, q) => t + q.aulas * N.professoresDe(q).length, 0); // responsável e regentes contam as aulas
     igual(r.professores.reduce((t, p) => t + p.aulas, 0), total);
     const marlon = r.professores.find((p) => p.nome === 'Marlon Soares Sigales');
     igual(marlon.aulas, 15); igual(marlon.horas, 12.5);
@@ -571,6 +571,41 @@ teste('Ausências do professor (congresso etc.) entram no cronograma dos planos 
     d.grade.alocacoes = [{ disc: 'calc1', d: 1, h: 0, sala: 's101' }];
     const cr = P.cronograma(d, q, Object.assign(P.conteudoPadrao(d, q), { roteiro: 'A\nB\nC' }), [{ inicio: '2027-03-15', fim: '2027-03-19', motivo: 'Congresso CONBEA' }]);
     igual(cr.linhas.slice(0, 3).map((l) => l.topico), ['A', 'Não haverá aula — Congresso CONBEA', 'B']);
+});
+
+teste('Regentes: responsável e regentes dão aula juntos (gerador, conflitos, laboratório, carga, plano e RAAD)', () => {
+    const d = comGradeUm(4);
+    const q = d.disciplinas.find((x) => x.id === 'secag');
+    igual(N.professoresDe(q), ['bruno', 'elisa']);
+    // o gerador ocupa os dois: nenhuma outra aula da Elisa no mesmo horário
+    for (let s = 1; s <= 10; s++) {
+        const dd = exemploUm(); const r = N.gerar(dd, { semente: s }); dd.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+        igual(N.conflitos(dd).lista.filter((c) => c.tipo === 'prof').length, 0, `semente ${s}`);
+    }
+    // conflito quando a regente tem outra aula no mesmo horário
+    d.grade.alocacoes = [{ disc: 'secag', d: 1, h: 6, sala: 's101' }, { disc: 'hidr', d: 1, h: 6, sala: 's102' }];
+    const c = N.conflitos(d).lista.find((x) => x.tipo === 'prof');
+    ok(c && c.msg.startsWith('Elisa Martins (exemplo) tem duas aulas'), c && c.msg);
+    // indisponibilidade da regente (quarta de manhã)
+    d.grade.alocacoes = [{ disc: 'secag', d: 2, h: 0, sala: 's101' }];
+    ok(N.conflitos(d).lista.some((x) => x.tipo === 'prof-indisp' && x.msg.startsWith('Elisa')));
+    // laboratório: regente sem autorização gera conflito
+    d.grade.alocacoes = [{ disc: 'secag', d: 1, h: 6, sala: 'lpc' }];
+    ok(N.conflitos(d).lista.some((x) => x.tipo === 'lab-permissao' && x.msg.includes('Elisa')));
+    // carga horária: os dois contam as horas
+    d.grade.alocacoes = [{ disc: 'secag', d: 1, h: 6, sala: 's101' }, { disc: 'secag', d: 1, h: 7, sala: 's101' }];
+    const v = P.horasProfessores(d, 'curso');
+    igual(v.find((p) => p.nome.startsWith('Bruno')).aula, v.find((p) => p.nome.startsWith('Elisa')).aula);
+    igual(N.relatorios(d).professores.find((p) => p.nome.startsWith('Elisa')).aulas, 2);
+    // plano: docentes = responsável + regente; RAAD da regente com vínculo de regente
+    igual(P.conteudoPadrao(d, q).docentes.map((x) => [x.nome, x.vinculo]), [['Bruno Costa (exemplo)', 'Professor Responsável'], ['Elisa Martins (exemplo)', 'Professor Regente']]);
+    igual(P.turmasDoSemestre(d, 'Elisa Martins (exemplo)', {}).find((t) => t.codigo === 'EAG071').vinculo, 'Professor regente');
+    // outros cursos: os regentes também ficam bloqueados lá
+    const ext = N.externoDe(d, d.cursos[0].id, 'teste');
+    igual(ext.aulas[0].professores, ['Bruno Costa (exemplo)', 'Elisa Martins (exemplo)']);
+    // excluir a regente tira ela da disciplina
+    N.excluir(d, 'professor', 'elisa');
+    igual(d.disciplinas.find((x) => x.id === 'secag').regentes, []);
 });
 
 teste('Arquivo: normalizar completa campos faltando', () => {

@@ -113,6 +113,13 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
    só o curso altera): entram nos dias letivos do PDF e no cronograma dos planos. Ausências do professor (congressos,
    ausências justificadas) na Área do professor → aba Ausências: entram no cronograma dos planos dele (dados individuais).
 
+48 [resolvido 17/11/2026] Disciplina com mais de um professor: 1 responsável + vários regentes (disciplina.regentes).
+   Todos dão aula: o gerador ocupa todos; conflitos (duas aulas, indisponível, pesquisa, laboratório não autorizado,
+   outros cursos) para cada um; outros cursos bloqueiam também os regentes (JSON/MEGA levam "professores"); carga horária,
+   rendimento, verificação e relatórios contam as horas de todos; visão por professor, PDF e relação mostram os
+   regentes; plano de ensino com docentes = responsável + regentes; RAAD do regente com vínculo "Professor regente";
+   o regente pode colocar/mover as aulas da disciplina e faz o plano dela.
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
@@ -130,7 +137,7 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 49 de 49 passaram (17/11 manhã: fixadas no Aleatorizar, eventos do curso, ausências).
+- node tests/testes.js: 50 de 50 passaram (17/11 tarde: regentes). Antes: 49 de 49 passaram (17/11 manhã: fixadas no Aleatorizar, eventos do curso, ausências).
 - Playwright 360/1366 (17/11 manhã): login exigido para editar/aleatorizar; curso (1º acesso) coloca aula em célula vazia
   (prévia de conflitos) e ela fica fixada e é mantida no Aleatorizar; professora não mexe em aula dos outros nem
   aleatoriza; só vê as disciplinas dela ao colocar; ausências salvas; sem estouro e sem erro de JS.

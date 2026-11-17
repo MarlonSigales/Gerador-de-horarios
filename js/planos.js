@@ -46,27 +46,30 @@ const Planos = (() => {
         // esta grade (turma conjunta conta uma vez)
         ((dados.grade && dados.grade.alocacoes) || []).forEach((a) => {
             const q = idx.disc[a.disc], h = cfg.horarios[a.h];
-            if (!q || !h || !q.professor) return;
-            const p = pessoa(n.nomeDe(dados.professores, q.professor));
-            const ch = `${cfg.dias[a.d]}|${h.ini}`;
-            if (p.vistos.has(ch)) return; p.vistos.add(ch);
-            const horas = dur(h.ini, h.fim);
-            if (ehLab(n.nomeDe(dados.salas, a.sala))) p.lab += horas; else p.sala += horas;
-            p.disciplinas.add(q.codigo || q.nome); p.cursos.add(meuCurso);
+            if (!q || !h) return;
+            n.professoresDe(q).forEach((pid) => { // responsável e regentes: todos dão aula
+                const p = pessoa(n.nomeDe(dados.professores, pid));
+                const ch = `${cfg.dias[a.d]}|${h.ini}`;
+                if (p.vistos.has(ch)) return; p.vistos.add(ch);
+                const horas = dur(h.ini, h.fim);
+                if (ehLab(n.nomeDe(dados.salas, a.sala))) p.lab += horas; else p.sala += horas;
+                p.disciplinas.add(q.codigo || q.nome); p.cursos.add(meuCurso);
+            });
         });
         if (escopo === 'unidade') {
             const minha = n.normNome((cfg.unidade || {}).nome);
             (dados.externos || []).forEach((ex) => {
                 if (ex.unidade && minha && n.normNome(ex.unidade) !== minha) return;
                 (ex.aulas || []).forEach((au) => {
-                    if (!au.professor) return;
-                    const p = pessoa(au.professor);
-                    p.cursos.add(ex.curso);
-                    const ch = `${au.dia}|${au.ini}`;
-                    if (p.vistos.has(ch)) return; p.vistos.add(ch); // turma conjunta: mesmo horário conta uma vez
-                    const horas = dur(au.ini, au.fim) || 50 / 60;
-                    if (ehLab(au.sala)) p.lab += horas; else p.sala += horas;
-                    p.disciplinas.add(au.codigo || au.disciplina); p.cursos.add(ex.curso);
+                    (au.professores && au.professores.length ? au.professores : [au.professor]).filter(Boolean).forEach((nome) => {
+                        const p = pessoa(nome);
+                        p.cursos.add(ex.curso);
+                        const ch = `${au.dia}|${au.ini}`;
+                        if (p.vistos.has(ch)) return; p.vistos.add(ch); // turma conjunta: mesmo horário conta uma vez
+                        const horas = dur(au.ini, au.fim) || 50 / 60;
+                        if (ehLab(au.sala)) p.lab += horas; else p.sala += horas;
+                        p.disciplinas.add(au.codigo || au.disciplina);
+                    });
                 });
             });
         }
@@ -110,13 +113,13 @@ const Planos = (() => {
     function conteudoPadrao(dados, disc) {
         const n = N();
         const horas = Number(disc.horas) || (Number(disc.creditos) || Number(disc.aulas) || 0) * 15;
-        const prof = n.nomeDe(dados.professores, disc.professor) || '';
         const aulasSemana = ((dados.grade && dados.grade.alocacoes) || []).filter((a) => a.disc === disc.id).length || Number(disc.aulas) || 0;
         return {
             codigo: disc.codigo || '', nome: disc.nome, turma: '', codigoUnidade: '', responsavel: `Câmara de Ensino do ${(dados.config.unidade || {}).nome || 'Centro'}`,
             curriculo: 'semestral', creditos: Number(disc.creditos) || Number(disc.aulas) || 0, cargaTeorica: horas, cargaPratica: 0,
             distribuicao: { E: 0, D: 0, EX: 0 }, preRequisitos: '',
-            docentes: prof ? [{ nome: prof, teorica: aulasSemana, pratica: 0, vinculo: 'Professor Regente' }] : [],
+            // responsável primeiro, depois os regentes (todos dão aula; o encargo de cada um pode ser ajustado no plano)
+            docentes: n.professoresDe(disc).map((p, i) => ({ nome: n.nomeDe(dados.professores, p), teorica: aulasSemana, pratica: 0, vinculo: i === 0 && disc.professor === p ? 'Professor Responsável' : 'Professor Regente' })),
             observacoesDocencia: '', ementa: '', objetivoGeral: '', objetivosEspecificos: '', metodologia: '', programa: '',
             roteiro: '', eventosSemAula: 'siiepe', datasSemAula: '', atividadesDiscentes: '', avaliacao: TEXTO_AVALIACAO,
             bibliografiaBasica: '', bibliografiaComplementar: '', outrasInformacoes: '', aprovacoes: TEXTO_APROVACOES, discenteRepresentante: true
@@ -252,7 +255,7 @@ const Planos = (() => {
     function exportarIndividual(dados, ind) {
         const n = N(), k = n.normNome(ind.nome);
         const prof = (dados.professores || []).find((p) => n.normNome(p.nome) === k) || { nome: ind.nome };
-        const minhas = (dados.disciplinas || []).filter((q) => prof.id && q.professor === prof.id);
+        const minhas = (dados.disciplinas || []).filter((q) => prof.id && n.professoresDe(q).includes(prof.id));
         const cfg = dados.config;
         const comoCodigos = (l) => (l || []).map((ch) => { const [d, h] = n.separa(ch); return cfg.horarios[h] && d < cfg.dias.length ? n.codigoHorario(cfg, d, h) : null; }).filter(Boolean).sort();
         return {
@@ -277,13 +280,13 @@ const Planos = (() => {
         const n = N(), k = n.normNome(nomeProfessor);
         const prof = (dados.professores || []).find((p) => n.normNome(p.nome) === k);
         if (!prof) return [];
-        return (dados.disciplinas || []).filter((q) => q.professor === prof.id && ((dados.grade && dados.grade.alocacoes) || []).some((a) => a.disc === q.id)).map((q) => {
+        return (dados.disciplinas || []).filter((q) => n.professoresDe(q).includes(prof.id) && ((dados.grade && dados.grade.alocacoes) || []).some((a) => a.disc === q.id)).map((q) => {
             const c = conteudo(dados, q, (planosSalvos || {})[q.codigo || q.id]);
             const creditos = Number(c.creditos) || Number(q.creditos) || Number(q.aulas) || 0;
             const ch = creditos * 18;
             const tot = (Number(c.cargaTeorica) || 0) + (Number(c.cargaPratica) || 0);
             const chP = tot ? Math.round(ch * (Number(c.cargaPratica) || 0) / tot * 100) / 100 : 0;
-            return { periodo: `${dados.config.ano}/${dados.config.metade}`, codigo: q.codigo || '', nome: q.nome, turma: c.turma || '', vinculo: 'Professor responsável pela turma',
+            return { periodo: `${dados.config.ano}/${dados.config.metade}`, codigo: q.codigo || '', nome: q.nome, turma: c.turma || '', vinculo: q.professor === prof.id ? 'Professor responsável pela turma' : 'Professor regente',
                 creditos, ch, chT: Math.round((ch - chP) * 100) / 100, chP, chE: 0, chEAD: 0, chEX: 0 };
         });
     }
@@ -323,8 +326,8 @@ const Planos = (() => {
         const n = N(), cfg = dados.config;
         const comoHorarios = (l) => (l || []).map((ch) => { const [d, h] = n.separa(ch); const ho = cfg.horarios[h]; return ho && cfg.dias[d] ? { dia: cfg.dias[d], ini: ho.ini, fim: ho.fim } : null; }).filter(Boolean);
         const cursos = [{ nome: (dados.cursos[0] || {}).nome || '', aulas: ((dados.grade && dados.grade.alocacoes) || []).length,
-            professores: [...new Set((dados.disciplinas || []).map((q) => n.nomeDe(dados.professores, q.professor)).filter(Boolean))] }];
-        (dados.externos || []).forEach((e) => { if (!e.unidade || n.normNome(e.unidade) === n.normNome((cfg.unidade || {}).nome)) cursos.push({ nome: e.curso, aulas: e.aulas.length, professores: [...new Set(e.aulas.map((a) => a.professor).filter(Boolean))] }); });
+            professores: [...new Set((dados.disciplinas || []).flatMap((q) => n.professoresDe(q).map((p) => n.nomeDe(dados.professores, p))).filter(Boolean))] }];
+        (dados.externos || []).forEach((e) => { if (!e.unidade || n.normNome(e.unidade) === n.normNome((cfg.unidade || {}).nome)) cursos.push({ nome: e.curso, aulas: e.aulas.length, professores: [...new Set(e.aulas.flatMap((a) => (a.professores && a.professores.length ? a.professores : [a.professor])).filter(Boolean))] }); });
         return {
             tipo: 'unidade', versao: 1, unidade: cfg.unidade, ano: cfg.ano, metade: cfg.metade, exportadoEm: new Date().toISOString(),
             calendario: cfg.calendario, horarios: cfg.horarios, dias: cfg.dias,

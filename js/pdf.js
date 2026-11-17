@@ -98,6 +98,7 @@ const GeradorPDF = (() => {
             doc.setTextColor(0, 0, 0);
         }
         const nomeP = (id) => N.nomeDe(D.professores, id) || 'sem professor';
+        const nomesCurtos = (q) => N.professoresDe(q).map((id) => primeiroNome(id)).join(' / ') || 'sem professor';
         const primeiroNome = (id) => { const n = nomeP(id).split(' '); return n.length > 1 ? `${n[0]} ${n[n.length - 1]}` : n[0]; };
         const turmas = (discs) => discs.flatMap((q) => q.ofertas.map((o) => `${N.sigla(N.nomeDe(D.cursos, o.curso))} ${o.semestre}º`)).join(', ');
 
@@ -147,15 +148,15 @@ const GeradorPDF = (() => {
                 novaPagina();
                 cabecalho(`${cu.nome} — ${s}º semestre (${sit})`, `${cfg.titulo} — ${periodo}`);
                 const janela = cu[sit] || [];
-                grade((a) => discs.some((q) => q.id === a.disc), (a, q) => `${primeiroNome(q.professor)} · ${N.nomeDe(D.salas, a.sala)}`, (k) => janela.length > 0 && !janela.includes(k), sit);
+                grade((a) => discs.some((q) => q.id === a.disc), (a, q) => `${nomesCurtos(q)} · ${N.nomeDe(D.salas, a.sala)}`, (k) => janela.length > 0 && !janela.includes(k), sit);
                 legenda('Disciplinas: ' + discs.map((q) => { const o = q.ofertas.find((x) => x.curso === cu.id && Number(x.semestre) === s);
-                    return `${q.codigo ? q.codigo + ' ' : ''}${q.nome} (${nomeP(q.professor)}; ${N.CARATER[o.carater].toLowerCase()}; ${q.aulas} aulas)`; }).join(' · ') + '.  Células cinza: fora do funcionamento do curso; vermelho/(!): conflito.');
+                    return `${q.codigo ? q.codigo + ' ' : ''}${q.nome} (${N.nomesProfessores(D, q) || 'sem professor'}; ${N.CARATER[o.carater].toLowerCase()}; ${q.aulas} aulas)`; }).join(' · ') + '.  Células cinza: fora do funcionamento do curso; vermelho/(!): conflito.');
             }
         });
 
         // ---------------- professores
         if (op.professor !== false) D.professores.forEach((p) => {
-            const discs = D.disciplinas.filter((q) => q.professor === p.id);
+            const discs = D.disciplinas.filter((q) => N.professoresDe(q).includes(p.id));
             if (!alocs.some((a) => discs.some((q) => q.id === a.disc)) && !op.vazios) return;
             novaPagina();
             cabecalho(`Professor(a): ${p.nome}`, `${cfg.titulo} — ${periodo}`);
@@ -169,7 +170,7 @@ const GeradorPDF = (() => {
             if (!alocs.some((a) => a.sala === s.id) && !(s.pesquisa || []).length && !op.vazios) return;
             novaPagina();
             cabecalho(`${s.tipo === 'laboratorio' ? 'Laboratório' : 'Sala'}: ${s.nome}`, `${cfg.titulo} — ${periodo}`);
-            grade((a) => a.sala === s.id, (a, q, ds) => `${primeiroNome(q.professor)} · ${turmas(ds)}`, (k) => (s.indisp || []).includes(k), null, (k) => (s.pesquisa || []).includes(k));
+            grade((a) => a.sala === s.id, (a, q, ds) => `${nomesCurtos(q)} · ${turmas(ds)}`, (k) => (s.indisp || []).includes(k), null, (k) => (s.pesquisa || []).includes(k));
             legenda(`${s.responsaveis.length ? `Responsáveis: ${s.responsaveis.map(nomeP).join(', ')}. ` : ''}${N.POLITICA[s.politica]}.  Células cinza: horários em que não pode ser usada; amarelo: reoferta.`);
         });
 
@@ -188,11 +189,11 @@ const GeradorPDF = (() => {
                 let ultimo = null;
                 linhas.forEach((l) => {
                     if (l.semestre !== ultimo) { body.push([{ content: txt(`${l.semestre}º semestre (${l.situacao})`), colSpan: 7, styles: { fillColor: VERDE_CLARO, textColor: VERDE, fontStyle: 'bold' } }]); ultimo = l.semestre; }
-                    body.push([l.semestre + 'º', l.codigo, l.nome, N.CARATER[l.carater], l.professor || '—', l.salas || '—', (l.horarios || '—') + (l.naGrade < l.aulas ? ` (faltam ${l.aulas - l.naGrade})` : '')].map(txt));
+                    body.push([l.semestre + 'º', l.codigo, l.nome, N.CARATER[l.carater], (l.professor || '—') + (l.regentes && l.regentes.length ? ` (regentes: ${l.regentes.join(', ')})` : ''), l.salas || '—', (l.horarios || '—') + (l.naGrade < l.aulas ? ` (faltam ${l.aulas - l.naGrade})` : '')].map(txt));
                 });
                 doc.autoTable({
                     startY: 31, margin: { left: 10, right: 10, bottom: 12 },
-                    head: [['Sem.', 'Código', 'Disciplina', 'Caráter', 'Professor responsável', 'Sala', 'Horários (código)']], body,
+                    head: [['Sem.', 'Código', 'Disciplina', 'Caráter', 'Professor responsável (regentes)', 'Sala', 'Horários (código)']], body,
                     theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 8, cellPadding: 1.2 },
                     columnStyles: { 0: { cellWidth: 11, halign: 'center' }, 1: { cellWidth: 18 }, 2: { cellWidth: 70 }, 3: { cellWidth: 20 }, 4: { cellWidth: 50 }, 5: { cellWidth: 45 }, 6: { font: 'courier', fontStyle: 'bold' } }
                 });
@@ -210,7 +211,7 @@ const GeradorPDF = (() => {
                     const minhas = alocs.filter((a) => a.disc === q.id).sort((a, b) => a.d - b.d || a.h - b.h);
                     const hs = N.codigosDisciplina(D, q.id);
                     const salas = [...new Set(minhas.map((a) => N.nomeDe(D.salas, a.sala)))].join(', ');
-                    return [q.codigo, q.nome, nomeP(q.professor), `${minhas.length}/${q.aulas}`,
+                    return [q.codigo, q.nome, nomeP(q.professor) + ((q.regentes || []).length ? ` (regentes: ${q.regentes.map(nomeP).join(', ')})` : ''), `${minhas.length}/${q.aulas}`,
                         q.ofertas.map((o) => `${N.sigla(N.nomeDe(D.cursos, o.curso))} ${o.semestre}º ${N.CARATER[o.carater].toLowerCase()} (${N.situacao(o.semestre, cfg.metade)})`).join('; '),
                         salas || '—', hs || '—'].map(txt);
                 }),
@@ -236,7 +237,7 @@ const GeradorPDF = (() => {
             doc.autoTable({
                 startY: doc.lastAutoTable.finalY + 6, margin: { left: 10, right: 10, bottom: 12 },
                 head: [['Disciplina sem lugar', 'Professor', 'Aulas', 'Motivo']],
-                body: falt.length ? falt.map((x) => { const q = D.disciplinas.find((y) => y.id === x.disc); return [N.nomeDisc(q), nomeP(q.professor), x.faltam, motivos[q.id] || 'tirada da grade à mão'].map(txt); })
+                body: falt.length ? falt.map((x) => { const q = D.disciplinas.find((y) => y.id === x.disc); return [N.nomeDisc(q), N.nomesProfessores(D, q) || 'sem professor', x.faltam, motivos[q.id] || 'tirada da grade à mão'].map(txt); })
                     : [['—', '', '', 'Todas as aulas cadastradas estão na grade.']],
                 theme: 'grid', headStyles: { fillColor: VERDE }, styles: { fontSize: 8 }
             });

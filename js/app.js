@@ -283,7 +283,7 @@
     }
     // ---------- disciplina
     function formDisciplina(id) {
-        const q = D.disciplinas.find((x) => x.id === id) || { id: null, codigo: '', nome: '', professor: '', aulas: 4, blocos: '', salas: [], fixos: [], equivalentes: [], ofertas: [] };
+        const q = D.disciplinas.find((x) => x.id === id) || { id: null, codigo: '', nome: '', professor: '', regentes: [], aulas: 4, blocos: '', salas: [], fixos: [], equivalentes: [], ofertas: [] };
         const linhaOferta = (o) => `<div class="linha-oferta">
             <input type="hidden" name="of-curso" value="${esc((D.cursos[0] || {}).id || '')}"><span>${esc((D.cursos[0] || {}).nome || 'Curso')} — semestre</span>
             <input type="number" name="of-sem" min="0" max="20" value="${o.semestre === undefined ? 1 : o.semestre}" title="Semestre (0 = optativa ainda sem semestre)">
@@ -296,6 +296,8 @@
             <label class="campo"><span>Professor responsável</span><select name="professor"><option value="">— escolha —</option>${D.professores.map((p) => `<option value="${esc(p.id)}"${q.professor === p.id ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
             <label class="campo"><span>Aulas por semana</span><input type="number" name="aulas" min="0" max="30" value="${q.aulas}"></label>
             <label class="campo"><span>Blocos de aulas seguidas</span><input type="text" name="blocos" value="${esc(q.blocos)}" placeholder="automático"><small>Ex.: 2+2 ou 3. Vazio: até 3 juntas; acima, blocos de 2.</small></label></div>
+            <fieldset><legend>Professores regentes (também dão aula)</legend>${checks('regentes', D.professores, q.regentes || [])}
+                <small>O responsável e os regentes dão aula juntos: todos ficam ocupados nos horários da disciplina (conflitos, laboratórios, carga horária, plano de ensino e RAAD).</small></fieldset>
             <fieldset><legend>Semestre(s) e caráter no curso</legend><div id="ofertas"></div>
                 <button type="button" class="btn btn-secondary btn-sm" data-add-oferta${D.cursos.length ? '' : ' disabled'}>+ Semestre</button>
                 <small class="muted"> Semestre 0 = optativa ainda sem semestre (fica fora da grade). Disciplina com 0 aulas também fica fora (estágio, TCC, EAD).</small>
@@ -310,7 +312,8 @@
             const ofertas = linhas.map((l) => ({ curso: $('[name=of-curso]', l).value, semestre: Number($('[name=of-sem]', l).value) || 1, carater: $('[name=of-car]', l).value }));
             const novoId = q.id || N.novoId('d');
             const equivalentes = marcados(dlg, 'equiv');
-            const novo = { id: novoId, codigo: val(dlg, 'codigo'), nome, professor: val(dlg, 'professor'), aulas: Number(val(dlg, 'aulas')) || 0, blocos: val(dlg, 'blocos'),
+            const professor = val(dlg, 'professor');
+            const novo = { id: novoId, codigo: val(dlg, 'codigo'), nome, professor, regentes: marcados(dlg, 'regentes').filter((p) => p !== professor), aulas: Number(val(dlg, 'aulas')) || 0, blocos: val(dlg, 'blocos'),
                 salas: marcados(dlg, 'salas'), fixos: ctx.f.valor(), equivalentes, ofertas };
             if (q.id) Object.assign(D.disciplinas.find((x) => x.id === q.id), novo); else D.disciplinas.push(novo);
             // equivalência vale nos dois sentidos
@@ -354,7 +357,7 @@
         } else if (tipo === 'professor') {
             html = D.professores.length ? `<table class="lista"><thead><tr><th>Professor</th><th>Disciplinas</th><th>Responsável por</th><th>Não pode</th><th></th></tr></thead><tbody>${D.professores.map((p) => `<tr>
                 <td><b>${esc(p.nome)}</b></td>
-                <td>${D.disciplinas.filter((q) => q.professor === p.id).map((q) => `<span class="etiqueta" title="${esc(q.nome)}">${esc(q.codigo || q.nome)}</span>`).join('') || '<small>—</small>'}</td>
+                <td>${D.disciplinas.filter((q) => N.professoresDe(q).includes(p.id)).map((q) => `<span class="etiqueta" title="${esc(q.nome)}${q.professor === p.id ? ' (responsável)' : ' (regente)'}">${esc(q.codigo || q.nome)}${q.professor === p.id ? '' : ' ʳ'}</span>`).join('') || '<small>—</small>'}</td>
                 <td>${D.salas.filter((s) => s.responsaveis.includes(p.id)).map((s) => `<span class="etiqueta lab">${esc(s.nome)}</span>`).join('') || '<small>—</small>'}</td>
                 <td>${p.indisp.length ? `${p.indisp.length} horários` : '<small>—</small>'}${(p.pesquisa || []).length ? ` <span class="etiqueta pesq">pesquisa: ${p.pesquisa.length}</span>` : ''}</td>${acoes(p.id)}</tr>`).join('')}</tbody></table>` : '';
         } else if (tipo === 'sala') {
@@ -365,9 +368,9 @@
                 <td>${s.indisp.length ? `${s.indisp.length} horários` : '<small>—</small>'}${(s.pesquisa || []).length ? ` <span class="etiqueta pesq">pesquisa: ${s.pesquisa.length}</span>` : ''}</td>${acoes(s.id)}</tr>`).join('')}</tbody></table>` : '';
         } else {
             const f = ($('#filtro-disc').value || '').toLowerCase();
-            const lista = D.disciplinas.filter((q) => !f || [q.codigo, q.nome, nomeP(q.professor), ...q.ofertas.map((o) => N.nomeDe(D.cursos, o.curso))].join(' ').toLowerCase().includes(f));
+            const lista = D.disciplinas.filter((q) => !f || [q.codigo, q.nome, N.nomesProfessores(D, q), ...q.ofertas.map((o) => N.nomeDe(D.cursos, o.curso))].join(' ').toLowerCase().includes(f));
             html = lista.length ? `<table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Professor</th><th>Aulas</th><th>Cursos</th><th>Salas</th><th>Restrições</th><th>Horários (código)</th><th></th></tr></thead><tbody>${lista.map((q) => `<tr>
-                <td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b></td><td>${q.professor ? esc(nomeP(q.professor)) : '<span style="color:var(--perigo)">sem professor</span>'}</td>
+                <td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b></td><td>${q.professor ? esc(nomeP(q.professor)) : '<span style="color:var(--perigo)">sem responsável</span>'}${(q.regentes || []).length ? `<br><small>regentes: ${esc(q.regentes.map(nomeP).join(', '))}</small>` : ''}</td>
                 <td>${q.aulas ? `${q.aulas} <small>(${N.blocos(q).join('+')})</small>` : '<span class="etiqueta" title="0 aulas ou semestre 0: fica fora da grade">fora da grade</span>'}</td>
                 <td>${q.ofertas.map((o) => { const c = D.cursos.find((x) => x.id === o.curso); const sit = N.situacao(o.semestre, D.config.metade);
                     return `<span class="etiqueta ${sit}" title="${esc(c ? c.nome : '')} — ${o.semestre}º semestre, ${N.CARATER[o.carater]}, ${sit}">${esc(c ? N.sigla(c.nome) : '?')} ${o.semestre}º ${N.CARATER[o.carater].slice(0, 3).toLowerCase()}.</span>`; }).join('') || '<small>—</small>'}</td>
@@ -404,7 +407,7 @@
         const q = D.disciplinas.find((x) => x.id === a.disc);
         if (!q) return false;
         if (ui.visao === 'curso') return q.ofertas.some((o) => o.curso === ui.item && Number(o.semestre) === Number(ui.semestre));
-        if (ui.visao === 'professor') return q.professor === ui.item;
+        if (ui.visao === 'professor') return N.professoresDe(q).includes(ui.item);
         return a.sala === ui.item;
     }
     function celulaFechada(k) {
@@ -472,12 +475,13 @@
             const cs = [...new Set(indices.flatMap((i) => c.porAloc[i] || []))];
             const erro = cs.some((x) => x.gravidade === 'erro'), avis = cs.length && !erro;
             const turmas = discs.flatMap((x) => x.ofertas.map((o) => `${N.sigla(N.nomeDe(D.cursos, o.curso))} ${o.semestre}º`));
-            const prof = N.nomeDe(D.professores, q.professor) || 'sem professor';
+            const profsQ = N.professoresDe(q).map((p) => N.nomeDe(D.professores, p));
+            const prof = profsQ.length ? profsQ[0] + (profsQ.length > 1 ? ` +${profsQ.length - 1}` : '') : 'sem professor';
             const sala = N.nomeDe(D.salas, a.sala);
             const linha2 = ui.visao === 'curso' ? `${prof.split(' ')[0]} · ${sala}` : ui.visao === 'professor' ? `${sala} · ${turmas.join(', ')}` : `${prof.split(' ')[0]} · ${turmas.join(', ')}`;
             const ofertaCurso = ui.visao === 'curso' ? q.ofertas.find((o) => o.curso === ui.item && Number(o.semestre) === Number(ui.semestre)) : null;
             const sit = sitVisao || (q.ofertas.length && q.ofertas.every((o) => N.situacao(o.semestre, cfg.metade) === 'reoferta') ? 'reoferta' : 'oferta');
-            const titulo = [discs.map((x) => N.nomeDisc(x)).join(' / ') + (discs.length > 1 ? ' (equivalentes)' : ''), `Professor: ${prof}`, `Sala: ${sala}`, `Turmas: ${turmas.join(', ')}`, `Horários (código): ${N.codigosDisciplina(D, q.id)}`,
+            const titulo = [discs.map((x) => N.nomeDisc(x)).join(' / ') + (discs.length > 1 ? ' (equivalentes)' : ''), `Professor${profsQ.length > 1 ? 'es' : ''}: ${profsQ.join(', ') || 'sem professor'}${profsQ.length > 1 ? ' (o 1º é o responsável)' : ''}`, `Sala: ${sala}`, `Turmas: ${turmas.join(', ')}`, `Horários (código): ${N.codigosDisciplina(D, q.id)}`,
                 a.travada ? 'Fixada (o Aleatorizar não mexe)' : '', ...cs.map((x) => `${x.gravidade === 'erro' ? '⚠' : '•'} ${x.msg}`)].filter(Boolean).join('\n');
             const sel = ui.sel && indices.some((i) => ui.sel.includes(i));
             return `<div class="aula ${sit}${ofertaCurso && ofertaCurso.carater !== 'obrigatoria' ? ' optativa' : ''}${erro ? ' conflito-erro' : ''}${avis ? ' conflito-aviso' : ''}${sel ? ' selecionada' : ''}${indices.some((i) => ui.destaque.has(i)) ? ' piscar' : ''}"
@@ -519,7 +523,7 @@
                 ultimo = grupo;
                 const falta = l.naGrade < l.aulas ? ` <span class="etiqueta reoferta" title="Aulas que faltam na grade">faltam ${l.aulas - l.naGrade}</span>` : '';
                 return `${cab}<tr><td>${esc(N.sigla(l.cursoNome))} ${l.semestre}º</td><td>${esc(l.codigo)}</td><td><b>${esc(l.nome)}</b></td><td>${esc(N.CARATER[l.carater])}</td>
-                    <td>${esc(l.professor) || '<span style="color:var(--perigo)">sem professor</span>'}</td><td>${esc(l.salas) || '—'}</td>
+                    <td>${esc(l.professor) || '<span style="color:var(--perigo)">sem professor</span>'}${l.regentes && l.regentes.length ? `<br><small>regentes: ${esc(l.regentes.join(', '))}</small>` : ''}</td><td>${esc(l.salas) || '—'}</td>
                     <td class="codigos">${esc(l.horarios) || '—'}${comConflito.has(l.disc) ? ' <span style="color:var(--perigo)" title="Tem conflito: veja a lista de conflitos">⚠</span>' : ''}${falta}</td></tr>`;
             }).join('')}</tbody></table>` : '<p class="vazio" style="padding:1rem">Nenhuma disciplina neste curso.</p>';
         $('#legenda').innerHTML = '<span><b>Código do horário</b> = dia + turno + período. Dia: dom 1, seg 2, ter 3, qua 4, qui 5, sex 6, sáb 7. Turno: manhã 1, tarde 2, noite 3. Ex.: 611 = sexta, manhã, 1º período; 621 622 623 624 = sexta à tarde, 4 períodos.</span>'
@@ -606,7 +610,7 @@
             const hs = ui.sel.map((i) => alocs[i].h);
             const ini = D.config.horarios[Math.min(...hs)], fim = D.config.horarios[Math.max(...hs)];
             titulo = discs.map((x) => N.nomeDisc(x)).join(' / ');
-            info = `${esc(D.config.dias[a.d])} ${esc(ini.ini)}–${esc(fim.fim)} · ${esc(N.nomeDe(D.professores, discs[0].professor))}`;
+            info = `${esc(D.config.dias[a.d])} ${esc(ini.ini)}–${esc(fim.fim)} · ${esc(N.nomesProfessores(D, discs[0]))}`;
             const trav = ui.sel.every((i) => alocs[i].travada);
             botoes = `<button type="button" class="btn btn-secondary btn-sm" data-acao="travar">${trav ? '🔓 Soltar (volta a ser sorteada)' : '🔒 Fixar'}</button>
                 <button type="button" class="btn btn-perigo btn-sm" data-acao="remover-bloco">Tirar da grade</button>`;
@@ -614,7 +618,7 @@
             const q = D.disciplinas.find((x) => x.id === ui.ins.disc);
             titulo = `Colocar: ${N.nomeDisc(q)}`;
             const falta = (N.faltando(D).find((x) => x.disc === q.id) || {}).faltam || 0;
-            info = `${esc(N.nomeDe(D.professores, q.professor))} · aulas seguidas: <input type="number" id="ins-n" min="1" max="${falta}" value="${ui.ins.n}" style="width:70px"> de ${falta} que faltam`;
+            info = `${esc(N.nomesProfessores(D, q))} · aulas seguidas: <input type="number" id="ins-n" min="1" max="${falta}" value="${ui.ins.n}" style="width:70px"> de ${falta} que faltam`;
             botoes = '';
         }
         el.innerHTML = `<div class="painel-edicao"><h3>${esc(titulo)}</h3><p class="muted">${info}</p>
@@ -640,7 +644,7 @@
         $('#faltam-conta').textContent = falt.length ? `${falt.reduce((s, x) => s + x.faltam, 0)} aulas` : '';
         $('#lista-faltam').innerHTML = falt.length ? `<table class="lista"><tbody>${falt.map((x) => {
             const q = D.disciplinas.find((y) => y.id === x.disc);
-            return `<tr><td><b>${esc(N.nomeDisc(q))}</b><br><small>${esc(N.nomeDe(D.professores, q.professor))}${motivos[q.id] ? ' — ' + esc(motivos[q.id]) : ''}</small></td>
+            return `<tr><td><b>${esc(N.nomeDisc(q))}</b><br><small>${esc(N.nomesProfessores(D, q))}${motivos[q.id] ? ' — ' + esc(motivos[q.id]) : ''}</small></td>
                 <td>${x.faltam} aula${x.faltam > 1 ? 's' : ''}</td>
                 <td class="acoes">${ui.editando && podeEditarDisc(q.id) ? `<button type="button" class="btn btn-secondary btn-sm" data-acao="colocar" data-id="${esc(q.id)}">Colocar</button>` : ''}</td></tr>`;
         }).join('')}</tbody></table>${ui.editando ? '' : '<small class="muted">Entre em ✏️ Editar para colocar à mão (o sistema mostra onde dá conflito).</small>'}`
@@ -652,7 +656,8 @@
         if (!idx.length) return;
         const a = D.grade.alocacoes[idx[0]], q = D.disciplinas.find((x) => x.id === a.disc);
         const tipo = li.dataset.tipo;
-        if (['prof', 'prof-indisp'].includes(tipo) && q.professor) { ui.visao = 'professor'; ui.item = q.professor; }
+        const profMsg = D.professores.find((p) => li.textContent.includes(p.nome));
+        if (['prof', 'prof-indisp', 'pesquisa-prof', 'externo-prof'].includes(tipo) && (profMsg || q.professor)) { ui.visao = 'professor'; ui.item = (profMsg || {}).id || q.professor; }
         else if (['sala-dupla', 'sala-indisp', 'lab-permissao', 'sala-pref'].includes(tipo) && a.sala) { ui.visao = 'sala'; ui.item = a.sala; }
         else if (q.ofertas.length) {
             let o = q.ofertas[0];
@@ -817,12 +822,12 @@
         if (podeCurso()) return true;
         const a = D.grade.alocacoes[i], q = a && D.disciplinas.find((x) => x.id === a.disc);
         const pid = profIdLogado();
-        return !!(pid && q && q.professor === pid);
+        return !!(pid && q && N.professoresDe(q).includes(pid));
     }
     function podeEditarDisc(discId) {
         if (podeCurso()) return true;
         const q = D.disciplinas.find((x) => x.id === discId), pid = profIdLogado();
-        return !!(pid && q && q.professor === pid);
+        return !!(pid && q && N.professoresDe(q).includes(pid));
     }
     function sairPapel() {
         try { sessionStorage.removeItem('gh_curso'); sessionStorage.removeItem('gh_prof'); sessionStorage.removeItem('gh_admin'); } catch (e) { /* ok */ }
@@ -900,11 +905,11 @@
         if (!permitidas.length) return aviso(podeCurso() ? 'Não há disciplinas com aula para colocar.' : 'Você não tem disciplinas com aula nesta grade.');
         const falta = (id) => (N.faltando(D).find((x) => x.disc === id) || {}).faltam || 0;
         // na visão de curso/semestre, primeiro as disciplinas daquele semestre; na do professor, as dele; na da sala, quem pode usá-la
-        const daVisao = (q) => (ui.visao === 'curso' ? q.ofertas.some((o) => o.curso === ui.item && Number(o.semestre) === Number(ui.semestre)) : ui.visao === 'professor' ? q.professor === ui.item : true);
+        const daVisao = (q) => (ui.visao === 'curso' ? q.ofertas.some((o) => o.curso === ui.item && Number(o.semestre) === Number(ui.semestre)) : ui.visao === 'professor' ? N.professoresDe(q).includes(ui.item) : true);
         const ordem = permitidas.slice().sort((a, b) => (daVisao(b) - daVisao(a)) || (falta(b.id) > 0) - (falta(a.id) > 0) || N.nomeDisc(a).localeCompare(N.nomeDisc(b)));
         const onde = `${cfg.dias[d]} ${cfg.horarios[h].ini} (código ${N.codigoHorario(cfg, d, h)})`;
         abrirJanela(`Colocar aula — ${onde}`, `
-            <div class="campos"><label class="campo" style="grid-column:1/-1"><span>Disciplina</span><select name="disc">${ordem.map((q) => `<option value="${esc(q.id)}">${esc(N.nomeDisc(q))} — ${esc(N.nomeDe(D.professores, q.professor) || 'sem professor')}${falta(q.id) ? ` (faltam ${falta(q.id)})` : ' (já toda na grade)'}</option>`).join('')}</select></label>
+            <div class="campos"><label class="campo" style="grid-column:1/-1"><span>Disciplina</span><select name="disc">${ordem.map((q) => `<option value="${esc(q.id)}">${esc(N.nomeDisc(q))} — ${esc(N.nomesProfessores(D, q) || 'sem professor')}${falta(q.id) ? ` (faltam ${falta(q.id)})` : ' (já toda na grade)'}</option>`).join('')}</select></label>
             <label class="campo"><span>Aulas seguidas a partir daqui</span><input type="number" name="n" min="1" max="8" value="2"></label>
             <label class="campo"><span>Sala ou laboratório</span><select name="sala"></select></label></div>
             <div data-mover></div>
@@ -919,7 +924,7 @@
         }, (dlg) => {
             const atualiza = () => {
                 const id = val(dlg, 'disc'), q = D.disciplinas.find((x) => x.id === id);
-                const salas = D.salas.filter((s) => N.profPodeNaSala(s, q.professor));
+                const salas = D.salas.filter((s) => N.professoresDe(q).every((p) => N.profPodeNaSala(s, p)));
                 const pref = N.salasPermitidas(D, q);
                 const selSala = $('[name=sala]', dlg), antes = selSala.value;
                 selSala.innerHTML = salas.sort((a, b) => pref.includes(b.id) - pref.includes(a.id)).map((s) => `<option value="${esc(s.id)}">${esc(s.nome)}${s.tipo === 'laboratorio' ? ' (lab.)' : ''}${pref.includes(s.id) ? '' : ' — fora da lista da disciplina'}</option>`).join('');
@@ -1038,19 +1043,20 @@
             ${linha('Horas preparando aula', 'preparo', ' h')}${linha('Horas de pesquisa (reservadas)', 'pesquisa', ' h')}${linha('Total', 'total', ' h')}</tbody></table></div>
             <div class="legenda"><span><i style="background:var(--teal)"></i>você</span><span><i style="background:var(--verde)"></i>média do curso</span><span><i style="background:var(--limao)"></i>média da unidade</span></div></div>`;
     }
-    const minhasDisc = (ind) => { const p = D.professores.find((x) => N.normNome(x.nome) === N.normNome(ind.nome)); return p ? D.disciplinas.filter((q) => q.professor === p.id && q.aulas > 0) : []; };
+    const minhasDisc = (ind) => { const p = D.professores.find((x) => N.normNome(x.nome) === N.normNome(ind.nome)); return p ? D.disciplinas.filter((q) => N.professoresDe(q).includes(p.id) && q.aulas > 0) : []; };
     function htmlPlanos(ind) {
         const lista = minhasDisc(ind);
         return `<div class="card"><h2>Planos de ensino ${D.config.ano}/${D.config.metade}</h2>
             <p class="muted">O plano vem pré-preenchido (identificação, cursos atendidos, local/horário, carga, docência) e o cronograma sai das datas do calendário acadêmico vigente, pulando feriados,
             recessos e pontos facultativos. O conteúdo que você escrever (ementa, objetivos, programa, roteiro de tópicos, avaliação, bibliografia) fica salvo: no próximo semestre só as datas mudam.</p>
-            ${lista.length ? `<table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Horários</th><th>Plano</th><th></th></tr></thead><tbody>${lista.map((q) => {
+            ${lista.length ? `<div class="tabela-wrap"><table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Horários</th><th>Plano</th><th></th></tr></thead><tbody>${lista.map((q) => {
                 const salvo = (ind.planos || {})[q.codigo || q.id];
-                return `<tr><td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b></td><td class="codigos">${esc(N.codigosDisciplina(D, q.id)) || '<small>fora da grade</small>'}</td>
+                const pidL = profIdLogado();
+                return `<tr><td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b>${pidL && q.professor !== pidL ? ' <span class="etiqueta">regente</span>' : ''}</td><td class="codigos">${esc(N.codigosDisciplina(D, q.id)) || '<small>fora da grade</small>'}</td>
                     <td>${salvo ? `<span class="etiqueta oferta">salvo${salvo.salvoEm ? ' em ' + esc(new Date(salvo.salvoEm).toLocaleDateString('pt-BR')) : ''}</span>` : '<span class="etiqueta">pré-preenchido</span>'}</td>
                     <td class="acoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="plano-editar" data-id="${esc(q.id)}">Editar</button>
                     <button type="button" class="btn btn-primary btn-sm" data-acao="plano-docx" data-id="${esc(q.id)}">⬇ DOCX</button></td></tr>`;
-            }).join('')}</tbody></table>` : '<p class="vazio">Nenhuma disciplina sua com aula nesta grade.</p>'}</div>`;
+            }).join('')}</tbody></table></div>` : '<p class="vazio">Nenhuma disciplina sua com aula nesta grade.</p>'}</div>`;
     }
     function editarPlano(ind, discId) {
         const q = D.disciplinas.find((x) => x.id === discId);
@@ -1148,8 +1154,8 @@
             <label class="campo"><span>Projetos unificados (um por linha: Projeto | Ação | Papel | CH)</span><textarea id="raad-projetos" rows="5" spellcheck="false">${esc((ind.projetos || []).map((x) => `${x.projeto} | ${x.acao || ''} | ${x.papel || ''} | ${x.ch || ''}`).join('\n'))}</textarea>
                 <small>Ficam guardados de um ano para o outro; ajuste as CHs.</small></label>
             <h3>Ensino ${r.ano}: ${r.chEnsino} h · média ${String(r.horasSemanais).replace('.', ',')} h/semana · pontos estimados ${String(r.pontosEnsinoEstimados).replace('.', ',')}</h3>
-            <table class="lista"><thead><tr><th>Período</th><th>Código</th><th>Disciplina</th><th>Créditos</th><th>CH</th><th>CH_T</th><th>CH_P</th></tr></thead><tbody>
-            ${r.turmas.map((x) => `<tr><td>${x.periodo}</td><td>${esc(x.codigo)}</td><td>${esc(x.nome)}</td><td>${x.creditos}</td><td><b>${x.ch}</b></td><td>${x.chT}</td><td>${x.chP}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhuma turma no ano.</td></tr>'}</tbody></table>
+            <div class="tabela-wrap"><table class="lista"><thead><tr><th>Período</th><th>Código</th><th>Disciplina</th><th>Créditos</th><th>CH</th><th>CH_T</th><th>CH_P</th></tr></thead><tbody>
+            ${r.turmas.map((x) => `<tr><td>${x.periodo}</td><td>${esc(x.codigo)}</td><td>${esc(x.nome)}</td><td>${x.creditos}</td><td><b>${x.ch}</b></td><td>${x.chT}</td><td>${x.chP}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhuma turma no ano.</td></tr>'}</tbody></table></div>
             <p><b>CH total (ensino + projetos):</b> ${r.chTotal} h</p></div>`;
     }
     function salvarRaadForm(ind) {
@@ -1254,7 +1260,7 @@
         const lista = D.externos || [];
         $('#lista-outros').innerHTML = lista.length ? `<table class="lista"><thead><tr><th>Curso</th><th>Unidade</th><th>Aulas</th><th>Professores daqui</th><th>Salas daqui</th><th>Origem</th><th></th></tr></thead><tbody>${lista.map((e, i) => {
             const mesma = !e.unidade || N.normNome(e.unidade) === N.normNome((D.config.unidade || {}).nome);
-            const profs = [...new Set(e.aulas.map((a) => a.professor))].filter((n) => D.professores.some((p) => N.normNome(p.nome) === N.normNome(n)));
+            const profs = [...new Set(e.aulas.flatMap((a) => (a.professores && a.professores.length ? a.professores : [a.professor])))].filter((n) => D.professores.some((p) => N.normNome(p.nome) === N.normNome(n)));
             const salas = [...new Set(e.aulas.map((a) => a.sala))].filter((n) => D.salas.some((x) => N.normNome(x.nome) === N.normNome(n)));
             return `<tr><td><b>${esc(e.curso)}</b></td><td>${esc(e.unidade || '—')}${mesma ? '' : ' <span class="etiqueta" title="Outra unidade: só as salas bloqueiam">só salas</span>'}</td><td>${e.aulas.length}</td>
                 <td>${mesma ? (profs.map((n) => `<span class="etiqueta">${esc(n)}</span>`).join('') || '<small>nenhum em comum</small>') : '<small>— (outra unidade)</small>'}</td>
@@ -1402,7 +1408,7 @@
                     const falta = (N.faltando(D).find((x) => x.disc === id) || {}).faltam || 1;
                     const bl = N.blocos(q).filter((b) => b <= falta);
                     ui.ins = { disc: id, n: bl.length ? Math.max(...bl) : falta }; ui.sel = null;
-                    const perm = N.salasPermitidas(D, q).filter((s) => N.profPodeNaSala(D.salas.find((x) => x.id === s), q.professor));
+                    const perm = N.salasPermitidas(D, q).filter((s) => N.professoresDe(q).every((p) => N.profPodeNaSala(D.salas.find((x) => x.id === s), p)));
                     ui.salaSel = perm[0] || (D.salas[0] || {}).id || '';
                     renderGradePagina();
                     $('#painel-edicao').scrollIntoView({ behavior: 'smooth', block: 'start' });
