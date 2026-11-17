@@ -276,7 +276,7 @@ teste('Matriz curricular: 9 engenharias + Geoprocessamento; importar Eng. Agríc
     const geo = u.cursos.find((c) => c.cod === 5590);
     igual([geo.semestres, geo.turno, geo.matriz.length], [6, 'noturno', 48]);
     igual(N.disciplinasDaMatriz(geo, 'g', []).find((q) => q.codigo === '15001176').aulas, 0, 'EAD sem aula presencial');
-    igual(u.cursos.find((c) => c.cod === 8700).matriz, null, '8700 não lida');
+    igual(u.cursos.some((c) => c.cod === 8700), false, '8700 fora do catálogo');
     const ea = u.cursos.find((c) => c.cod === 700);
     const ds = N.disciplinasDaMatriz(ea, 'c1', []);
     igual(ds.length, 105);

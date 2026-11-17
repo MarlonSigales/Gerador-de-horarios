@@ -137,9 +137,8 @@ Atualizado em 17/11/2026 (versão 1). Os números são fixos (servem de referên
    créditos e horas idênticos em 797 linhas; Geoprocessamento (5590, noturno, 6 semestres, 48 disciplinas) incluído.
    Carga horária real: aulas/semana = horas ÷ 15 arredondado para cima (1310403: 68 h → 5 períodos); créditos e
    horas aparecem na lista de disciplinas. Nº de semestres do curso = último semestre da matriz.
-53 [fazer] Industrialização da Madeira e Sustentabilidade (8700): o link da unidade 444 (cursos/cod/8700) abre
-   "404 — Página não encontrada" no próprio portal (conferido no Chrome em 17/11/2026); matriz não publicada.
-   Incluir quando o portal publicar ou com o PDF do PPC.
+53 [rejeitado 17/11/2026] Industrialização da Madeira e Sustentabilidade (8700): página dá 404 no portal; retirado do
+   catálogo a pedido do usuário.
 
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
