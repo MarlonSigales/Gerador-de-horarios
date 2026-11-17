@@ -83,7 +83,7 @@ const Exemplo = (() => {
         d.config.titulo = 'Grade horária — Engenharia Agrícola';
         d.externos = ['ecaut', 'ecivil'].map((c) => N.externoDe(N.separarCurso(todos, c), c, 'exemplo'));
         d.grade = { alocacoes: [], naoAlocadas: [], geradaEm: null };
-        return d;
+        return N.normalizar(d); // mesmo formato de um arquivo aberto (ex.: divisão das aulas pelo padrão do curso)
     }
     return { criar, criarCompleto };
 })();

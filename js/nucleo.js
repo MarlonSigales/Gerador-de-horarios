@@ -144,15 +144,24 @@ const Nucleo = (() => {
         return (dados.salas || []).filter((s) => s.tipo !== 'laboratorio').map((s) => s.id);
     }
 
-    /** Divide as aulas semanais em blocos de aulas seguidas: "2+2" ou automático (até 3 juntas; acima, blocos de 2). */
-    function blocos(disc) {
+    const DIVISAO = { seguidas: 'Todas seguidas (um bloco só)', duas: 'Em duas partes', auto: 'Automático (até 3 juntas; acima, blocos de 2)', manual: 'Personalizado (ex.: 3+2)' };
+    /**
+     * Divide as aulas semanais em blocos de aulas seguidas, pela escolha da disciplina (disc.divisao) ou, se vazia,
+     * pelo padrão do curso (padrao = config.divisaoPadrao):
+     *  'seguidas' → um bloco com todas; 'duas' → duas partes (5 → 3+2); 'manual' → o texto de disc.blocos ("2+2");
+     *  'auto' (padrão) → até 3 juntas; acima, blocos de 2. Sem divisão escolhida e com texto válido em disc.blocos, vale o texto.
+     */
+    function blocos(disc, padrao) {
         const n = Math.max(0, Number(disc.aulas) || 0);
+        if (!n) return [];
         const txt = String(disc.blocos || '').trim();
-        if (txt) {
-            const partes = txt.split(/[+,; ]+/).map(Number).filter((x) => x > 0);
-            if (partes.length && partes.reduce((a, b) => a + b, 0) === n) return partes;
-        }
-        if (n <= 3) return n ? [n] : [];
+        const partesTxt = txt ? txt.split(/[+,; ]+/).map(Number).filter((x) => x > 0) : [];
+        const txtOk = partesTxt.length && partesTxt.reduce((a, b) => a + b, 0) === n;
+        const modo = disc.divisao || (txtOk ? 'manual' : (padrao || 'auto'));
+        if (modo === 'seguidas') return [n];
+        if (modo === 'duas') return n > 1 ? [Math.ceil(n / 2), Math.floor(n / 2)] : [n];
+        if (modo === 'manual' && txtOk) return partesTxt;
+        if (n <= 3) return [n];
         const r = [];
         let resto = n;
         while (resto > 3) { r.push(2); resto -= 2; }
@@ -792,7 +801,9 @@ const Nucleo = (() => {
             const jaTem = travadas.filter((a) => a.disc === lider).length;
             const aulas = Number(discs[0].aulas) || 0;
             const resto = Math.max(0, aulas - jaTem);
-            const bl = jaTem ? blocos({ aulas: resto }) : blocos(discs[0]);
+            // aulas fixadas em parte: o resto segue a divisão escolhida (todas seguidas → um bloco com o resto)
+            const modoD = discs[0].divisao || cfg.divisaoPadrao;
+            const bl = jaTem ? blocos({ aulas: resto, divisao: modoD === 'seguidas' ? 'seguidas' : (modoD === 'duas' && resto <= Math.ceil(aulas / 2) ? 'seguidas' : '') }, cfg.divisaoPadrao) : blocos(discs[0], cfg.divisaoPadrao);
             // prioridade dos responsáveis: a unidade cujo professor é responsável por um laboratório permitido vai primeiro
             const prioridade = salas.some((s) => idx.sala[s] && idx.sala[s].tipo === 'laboratorio' && profs.some((p) => (idx.sala[s].responsaveis || []).includes(p))) ? 0 : 1;
             // outros cursos: horários em que o professor já está ocupado (bloqueio) ou em turma conjunta da mesma disciplina
@@ -951,6 +962,7 @@ const Nucleo = (() => {
         if (!x || typeof x !== 'object') return d;
         const cfg = Object.assign(d.config, x.config || {});
         cfg.metade = Number(cfg.metade) === 2 ? 2 : 1;
+        if (!DIVISAO[cfg.divisaoPadrao]) cfg.divisaoPadrao = 'auto';
         if (!Array.isArray(cfg.dias) || !cfg.dias.length) cfg.dias = DIAS_SEMANA.slice(0, 5);
         if (!Array.isArray(cfg.horarios) || !cfg.horarios.length) cfg.horarios = horariosPadrao();
         const arr = (v) => Array.isArray(v) ? v : [];
@@ -963,9 +975,15 @@ const Nucleo = (() => {
         d.salas = arr(x.salas).map((s) => ({ id: s.id || novoId('s'), nome: s.nome || 'Sala', tipo: s.tipo === 'laboratorio' ? 'laboratorio' : 'sala', capacidade: Number(s.capacidade) || 0,
             responsaveis: arr(s.responsaveis), politica: POLITICA[s.politica] ? s.politica : 'todos', autorizados: arr(s.autorizados), indisp: arr(s.indisp), pesquisa: arr(s.pesquisa) }));
         d.disciplinas = arr(x.disciplinas).map((q) => ({ id: q.id || novoId('d'), codigo: q.codigo || '', nome: q.nome || 'Disciplina', professor: q.professor || '', regentes: arr(q.regentes).filter((p) => p && p !== q.professor),
-            aulas: Number(q.aulas) || 0, blocos: q.blocos || '', salas: arr(q.salas), fixos: arr(q.fixos), equivalentes: arr(q.equivalentes),
+            aulas: Number(q.aulas) || 0, blocos: q.blocos || '', divisao: DIVISAO[q.divisao] ? q.divisao : '', salas: arr(q.salas), fixos: arr(q.fixos), equivalentes: arr(q.equivalentes),
             ofertas: arr(q.ofertas).map((o) => ({ curso: o.curso, semestre: Number(o.semestre) >= 0 && o.semestre !== '' && o.semestre !== undefined ? Number(o.semestre) : 1, carater: CARATER[o.carater] ? o.carater : 'obrigatoria' })),
             creditos: Number(q.creditos) || 0, horas: Number(q.horas) || 0 }));
+        // texto antigo de blocos ("2+2") sem divisão escolhida: igual ao automático → limpa; diferente → personalizado
+        d.disciplinas.forEach((q) => {
+            if (q.divisao || !q.blocos) return;
+            const manual = blocos(Object.assign({}, q, { divisao: 'manual' })), auto = blocos(Object.assign({}, q, { blocos: '', divisao: 'auto' }));
+            if (manual.join('+') === auto.join('+')) q.blocos = ''; else if (manual.reduce((a, b) => a + b, 0) === q.aulas) q.divisao = 'manual'; else q.blocos = '';
+        });
         const g = x.grade || {};
         d.grade = { alocacoes: arr(g.alocacoes).map((a) => ({ disc: a.disc, d: Number(a.d), h: Number(a.h), sala: a.sala, travada: !!a.travada })), naoAlocadas: arr(g.naoAlocadas), geradaEm: g.geradaEm || null };
         d.externos = arr(x.externos).map((e) => ({ curso: e.curso || '?', unidade: e.unidade || '', ano: Number(e.ano) || d.config.ano, metade: Number(e.metade) === 2 ? 2 : 1, origem: e.origem || 'arquivo', versao: e.versao || null,
@@ -1034,7 +1052,7 @@ const Nucleo = (() => {
     return {
         CARATER, POLITICA, DIAS_SEMANA, NOME_TURNO,
         chave, separa, copia, rngSemente, turno, situacao, todasChaves, seguidas, indices, gruposEquivalentes, janelaCursos,
-        profPodeNaSala, salasPermitidas, blocos, turmasDe, sigla, professoresDe, nomesProfessores, nomeDisc, nomeDe, rotuloHorario,
+        profPodeNaSala, salasPermitidas, DIVISAO, blocos, turmasDe, sigla, professoresDe, nomesProfessores, nomeDisc, nomeDe, rotuloHorario,
         gravidadeColisao, relatorios, eventosDoCalendario, datasDoPeriodo, CALENDARIO_URL_2027, calendario2027, lerCalendarioTexto, analisarCalendario, NOME_TIPO_CAL, dataBR, codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
         novoId, dadosVazios, horariosPadrao, normalizar, excluir, chavesTurno, remapearConfig
     };

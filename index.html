@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261117m">
+    <link rel="stylesheet" href="css/style.css?v=20261117n">
 </head>
 <body>
     <header class="topbar">
@@ -89,6 +89,8 @@
                                     <select id="cfg-metade"><option value="1">1º semestre do ano: semestres ímpares do curso = oferta, pares = reoferta</option><option value="2">2º semestre do ano: semestres pares do curso = oferta, ímpares = reoferta</option></select>
                                 </label>
                             </div>
+                            <div class="campos"><label class="campo"><span>Divisão padrão das aulas de cada disciplina na semana</span><select id="cfg-divisao"></select>
+                                <small>Ex.: 4 aulas — todas seguidas: 4 juntas; em duas partes: 2 + 2 (em dias diferentes, se der). Cada disciplina pode escolher outra no cadastro.</small></label></div>
                             <fieldset><legend>Dias de aula</legend><div class="checks" id="cfg-dias"></div></fieldset>
                             <fieldset><legend>Horários das aulas (um por linha, início-fim)</legend>
                                 <textarea id="cfg-horarios" rows="10" spellcheck="false"></textarea>
@@ -281,17 +283,17 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261117m"></script>
-    <script src="js/matrizes.js?v=20261117m"></script>
-    <script src="js/exemplo.js?v=20261117m"></script>
-    <script src="js/nuvem.js?v=20261117m"></script>
-    <script src="js/planos.js?v=20261117m"></script>
-    <script src="js/logos.js?v=20261117m"></script>
+    <script src="js/nucleo.js?v=20261117n"></script>
+    <script src="js/matrizes.js?v=20261117n"></script>
+    <script src="js/exemplo.js?v=20261117n"></script>
+    <script src="js/nuvem.js?v=20261117n"></script>
+    <script src="js/planos.js?v=20261117n"></script>
+    <script src="js/logos.js?v=20261117n"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
     <script src="js/vendor/docx.umd.js"></script>
-    <script src="js/docx-docs.js?v=20261117m"></script>
-    <script src="js/pdf.js?v=20261117m"></script>
-    <script src="js/app.js?v=20261117m"></script>
+    <script src="js/docx-docs.js?v=20261117n"></script>
+    <script src="js/pdf.js?v=20261117n"></script>
+    <script src="js/app.js?v=20261117n"></script>
 </body>
 </html>

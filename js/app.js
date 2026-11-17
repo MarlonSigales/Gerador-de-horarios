@@ -116,6 +116,7 @@
         $('#cfg-titulo').value = c.titulo || '';
         $('#cfg-ano').value = c.ano;
         $('#cfg-metade').value = String(c.metade);
+        $('#cfg-divisao').innerHTML = Object.entries(N.DIVISAO).filter(([k]) => k !== 'manual').map(([k, v]) => `<option value="${k}"${(c.divisaoPadrao || 'auto') === k ? ' selected' : ''}>${esc(v)}</option>`).join('');
         $('#cfg-dias').innerHTML = N.DIAS_SEMANA.map((d) => `<label><input type="checkbox" value="${esc(d)}"${c.dias.includes(d) ? ' checked' : ''}> ${esc(d)}</label>`).join('');
         $('#cfg-horarios').value = c.horarios.map((h) => `${h.ini}-${h.fim}`).join('\n');
         renderCalendario();
@@ -137,7 +138,7 @@
         const horarios = lerHorarios($('#cfg-horarios').value);
         if (!dias.length) return aviso('Marque pelo menos um dia.');
         if (!horarios.length) return aviso('Informe os horários no formato 07:30-08:20, um por linha.');
-        const nova = { titulo: $('#cfg-titulo').value.trim() || 'Grade horária', ano: Number($('#cfg-ano').value) || D.config.ano, metade: Number($('#cfg-metade').value) === 2 ? 2 : 1, dias, horarios };
+        const nova = { divisaoPadrao: $('#cfg-divisao').value || 'auto', titulo: $('#cfg-titulo').value.trim() || 'Grade horária', ano: Number($('#cfg-ano').value) || D.config.ano, metade: Number($('#cfg-metade').value) === 2 ? 2 : 1, dias, horarios };
         const r = N.remapearConfig(D, nova);
         if (r.perdidas && !confirm(`${r.perdidas} aula(s) da grade estão em dias ou horários que deixam de existir e serão retiradas. Continuar?`)) return;
         guardarHistorico();
@@ -296,7 +297,11 @@
             <label class="campo" style="grid-column: span 2"><span>Nome</span><input type="text" name="nome" value="${esc(q.nome)}" required></label>
             <label class="campo"><span>Professor responsável</span><select name="professor"><option value="">— escolha —</option>${D.professores.map((p) => `<option value="${esc(p.id)}"${q.professor === p.id ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
             <label class="campo"><span>Aulas por semana</span><input type="number" name="aulas" min="0" max="30" value="${q.aulas}"></label>
-            <label class="campo"><span>Blocos de aulas seguidas</span><input type="text" name="blocos" value="${esc(q.blocos)}" placeholder="automático"><small>Ex.: 2+2 ou 3. Vazio: até 3 juntas; acima, blocos de 2.</small></label></div>
+            <label class="campo"><span>Divisão das aulas na semana</span><select name="divisao">
+                <option value=""${!q.divisao ? ' selected' : ''}>Padrão do curso (${esc(N.DIVISAO[D.config.divisaoPadrao || 'auto'].split(' (')[0].toLowerCase())})</option>
+                ${Object.entries(N.DIVISAO).map(([k, v]) => `<option value="${k}"${q.divisao === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>
+                <small data-prev-blocos></small></label>
+            <label class="campo" data-campo-blocos><span>Blocos (personalizado)</span><input type="text" name="blocos" value="${esc(q.blocos)}" placeholder="ex.: 3+2"><small>A soma tem que dar as aulas por semana.</small></label></div>
             <fieldset><legend>Professores regentes (também dão aula)</legend>${checks('regentes', D.professores, q.regentes || [])}
                 <small>O responsável e os regentes dão aula juntos: todos ficam ocupados nos horários da disciplina (conflitos, laboratórios, carga horária, plano de ensino e RAAD).</small></fieldset>
             <fieldset><legend>Semestre(s) e caráter no curso</legend><div id="ofertas"></div>
@@ -314,7 +319,9 @@
             const novoId = q.id || N.novoId('d');
             const equivalentes = marcados(dlg, 'equiv');
             const professor = val(dlg, 'professor');
-            const novo = { id: novoId, codigo: val(dlg, 'codigo'), nome, professor, regentes: marcados(dlg, 'regentes').filter((p) => p !== professor), aulas: Number(val(dlg, 'aulas')) || 0, blocos: val(dlg, 'blocos'),
+            const divisao = val(dlg, 'divisao');
+            if (divisao === 'manual') { const pt = val(dlg, 'blocos').split(/[+,; ]+/).map(Number).filter((x) => x > 0); if (pt.reduce((a, b) => a + b, 0) !== (Number(val(dlg, 'aulas')) || 0)) { aviso('No personalizado, a soma dos blocos precisa dar as aulas por semana (ex.: 3+2 = 5).'); return false; } }
+            const novo = { id: novoId, codigo: val(dlg, 'codigo'), nome, professor, regentes: marcados(dlg, 'regentes').filter((p) => p !== professor), aulas: Number(val(dlg, 'aulas')) || 0, blocos: divisao === 'manual' ? val(dlg, 'blocos') : '', divisao,
                 salas: marcados(dlg, 'salas'), fixos: ctx.f.valor(), equivalentes, ofertas };
             if (q.id) Object.assign(D.disciplinas.find((x) => x.id === q.id), novo); else D.disciplinas.push(novo);
             // equivalência vale nos dois sentidos
@@ -333,6 +340,14 @@
                 const et = $('[data-sit]', l); et.textContent = sit; et.className = `etiqueta ${sem > 0 ? sit : ''}`;
             });
             caixa.innerHTML = q.ofertas.map(linhaOferta).join('');
+            const prevB = () => { // mostra como as aulas ficam divididas
+                const dv = val(dlg, 'divisao');
+                $('[data-campo-blocos]', dlg).hidden = dv !== 'manual';
+                const bl = N.blocos({ aulas: Number(val(dlg, 'aulas')) || 0, blocos: dv === 'manual' ? val(dlg, 'blocos') : '', divisao: dv }, D.config.divisaoPadrao);
+                $('[data-prev-blocos]', dlg).textContent = bl.length ? `Na grade: ${bl.join(' + ')} aula${bl.length > 1 ? 's (em dias diferentes, se der)' : (bl[0] > 1 ? 's seguidas' : '')}.` : '';
+            };
+            ['divisao', 'aulas', 'blocos'].forEach((nm) => { const el = $(`[name=${nm}]`, dlg); el.addEventListener('input', prevB); el.addEventListener('change', prevB); });
+            prevB();
             $('[data-add-oferta]', dlg).addEventListener('click', () => { caixa.insertAdjacentHTML('beforeend', linhaOferta({ curso: (D.cursos[0] || {}).id, semestre: 1, carater: 'obrigatoria' })); atualiza(); });
             if (!q.id && !q.ofertas.length && D.cursos[0]) $('[data-add-oferta]', dlg).click();
             caixa.addEventListener('click', (e) => { if (e.target.closest('[data-tira]')) { e.target.closest('.linha-oferta').remove(); } });
@@ -372,7 +387,7 @@
             const lista = D.disciplinas.filter((q) => !f || [q.codigo, q.nome, N.nomesProfessores(D, q), ...q.ofertas.map((o) => N.nomeDe(D.cursos, o.curso))].join(' ').toLowerCase().includes(f));
             html = lista.length ? `<table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Professor</th><th>Aulas</th><th>Cursos</th><th>Salas</th><th>Restrições</th><th>Horários (código)</th><th></th></tr></thead><tbody>${lista.map((q) => `<tr>
                 <td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b></td><td>${q.professor ? esc(nomeP(q.professor)) : '<span style="color:var(--perigo)">sem responsável</span>'}${(q.regentes || []).length ? `<br><small>regentes: ${esc(q.regentes.map(nomeP).join(', '))}</small>` : ''}</td>
-                <td>${q.aulas ? `${q.aulas} <small>(${N.blocos(q).join('+')})</small>` : '<span class="etiqueta" title="0 aulas ou semestre 0: fica fora da grade">fora da grade</span>'}</td>
+                <td>${q.aulas ? `${q.aulas} <small title="${esc(q.divisao ? N.DIVISAO[q.divisao] : 'Padrão do curso')}">(${N.blocos(q, D.config.divisaoPadrao).join('+')})</small>` : '<span class="etiqueta" title="0 aulas ou semestre 0: fica fora da grade">fora da grade</span>'}</td>
                 <td>${q.ofertas.map((o) => { const c = D.cursos.find((x) => x.id === o.curso); const sit = N.situacao(o.semestre, D.config.metade);
                     return `<span class="etiqueta ${sit}" title="${esc(c ? c.nome : '')} — ${o.semestre}º semestre, ${N.CARATER[o.carater]}, ${sit}">${esc(c ? N.sigla(c.nome) : '?')} ${o.semestre}º ${N.CARATER[o.carater].slice(0, 3).toLowerCase()}.</span>`; }).join('') || '<small>—</small>'}</td>
                 <td>${q.salas.map((s) => `<span class="etiqueta lab">${esc(N.nomeDe(D.salas, s))}</span>`).join('') || '<small>salas comuns</small>'}</td>
@@ -943,7 +958,7 @@
                     });
                     if (livre) selSala.value = livre;
                 }
-                const bl = N.blocos(q).filter((b) => b <= Math.max(f, 1));
+                const bl = N.blocos(q, D.config.divisaoPadrao).filter((b) => b <= Math.max(f, 1));
                 const nEl = $('[name=n]', dlg);
                 if (!nEl.dataset.mexido) nEl.value = f ? (bl.length ? Math.max(...bl) : f) : 2;
                 // já toda na grade: escolher um bloco para mover para cá
@@ -1410,7 +1425,7 @@
                 case 'colocar': {
                     const q = D.disciplinas.find((x) => x.id === id);
                     const falta = (N.faltando(D).find((x) => x.disc === id) || {}).faltam || 1;
-                    const bl = N.blocos(q).filter((b) => b <= falta);
+                    const bl = N.blocos(q, D.config.divisaoPadrao).filter((b) => b <= falta);
                     ui.ins = { disc: id, n: bl.length ? Math.max(...bl) : falta }; ui.sel = null;
                     const perm = N.salasPermitidas(D, q).filter((s) => N.professoresDe(q).every((p) => N.profPodeNaSala(D.salas.find((x) => x.id === s), p)));
                     ui.salaSel = perm[0] || (D.salas[0] || {}).id || '';

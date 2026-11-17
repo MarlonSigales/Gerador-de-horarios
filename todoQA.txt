@@ -128,6 +128,10 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 
 50 [resolvido 17/11/2026] Rodapé: Ádamo de Sousa Araújo como coautor (página e rodapé do PDF).
 
+51 [resolvido 17/11/2026] Divisão das aulas na semana: padrão do curso (Configuração) e escolha por disciplina — todas
+   seguidas (um bloco), em duas partes (5 → 3+2, em dias diferentes se der), automático (até 3 juntas; acima, blocos
+   de 2) ou personalizado (ex.: 3+2; soma conferida). Prévia no cadastro. Texto antigo "2+2" é convertido ao abrir.
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
@@ -145,7 +149,7 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 53 de 53 passaram (17/11 fim de tarde: níveis erro/aviso/aviso leve e regentes no gerador).
+- node tests/testes.js: 55 de 55 passaram (divisão das aulas). Antes: 53 de 53 passaram (17/11 fim de tarde: níveis erro/aviso/aviso leve e regentes no gerador).
 - 50 de 50 passaram (17/11 tarde: regentes). Antes: 49 de 49 passaram (17/11 manhã: fixadas no Aleatorizar, eventos do curso, ausências).
 - Playwright 360/1366 (17/11 manhã): login exigido para editar/aleatorizar; curso (1º acesso) coloca aula em célula vazia
   (prévia de conflitos) e ela fica fixada e é mantida no Aleatorizar; professora não mexe em aula dos outros nem

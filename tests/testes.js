@@ -655,6 +655,33 @@ teste('Gerador: com regentes, nunca põe o mesmo responsável em duas aulas e ev
     }
 });
 
+teste('Divisão das aulas: todas seguidas, em duas partes, automático, personalizado e padrão do curso', () => {
+    igual(N.blocos({ aulas: 4, divisao: 'seguidas' }), [4]);
+    igual(N.blocos({ aulas: 5, divisao: 'duas' }), [3, 2]);
+    igual(N.blocos({ aulas: 6, divisao: 'auto' }), [2, 2, 2]);
+    igual(N.blocos({ aulas: 5, divisao: 'manual', blocos: '3+2' }), [3, 2]);
+    igual(N.blocos({ aulas: 4 }, 'seguidas'), [4], 'padrão do curso');
+    igual(N.blocos({ aulas: 4, divisao: 'duas' }, 'seguidas'), [2, 2], 'a disciplina manda');
+    const d = N.normalizar({ disciplinas: [{ nome: 'A', aulas: 4, blocos: '2+2' }, { nome: 'B', aulas: 5, blocos: '3+2' }] });
+    igual(d.disciplinas.map((q) => [q.divisao, q.blocos]), [['', ''], ['manual', '3+2']]);
+});
+
+teste('Gerador: "todas seguidas" põe as aulas juntas no mesmo dia; "em duas partes", em dois dias', () => {
+    for (let s = 1; s <= 6; s++) {
+        const d = exemploUm();
+        d.config.divisaoPadrao = 'seguidas';
+        d.disciplinas.find((q) => q.id === 'secag').divisao = 'duas';
+        const r = N.gerar(d, { semente: s });
+        igual(r.naoAlocadas.length, 0, `semente ${s}`);
+        const c1 = r.alocacoes.filter((a) => a.disc === 'calc1');
+        igual(new Set(c1.map((a) => a.d)).size, 1, 'Cálculo I num dia só');
+        const hs = c1.map((a) => a.h).sort((a, b) => a - b);
+        igual(hs, hs.map((_, i) => hs[0] + i), 'seguidas');
+        const sg = r.alocacoes.filter((a) => a.disc === 'secag');
+        igual(new Set(sg.map((a) => a.d)).size, 2, 'Secagem em dois dias');
+    }
+});
+
 teste('Arquivo: normalizar completa campos faltando', () => {
     const d = N.normalizar({ cursos: [{ nome: 'X' }], disciplinas: [{ nome: 'Y', ofertas: [{ curso: 'c', semestre: '3' }] }] });
     igual(d.cursos[0].semestres, 10);
