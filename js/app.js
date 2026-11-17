@@ -54,7 +54,8 @@
         { id: 'disciplinas', titulo: 'Disciplinas', num: 5, conta: () => D.disciplinas.length },
         { id: 'outros', titulo: 'Outros cursos', num: 6, conta: () => (D.externos || []).length },
         { id: 'grade', titulo: 'Grade', num: 7, conta: () => { const c = N.conflitos(D); return c.erros ? { t: `⚠ ${c.erros}`, ruim: true } : (D.grade.alocacoes.length ? '✓' : ''); } },
-        { id: 'pdf', titulo: 'PDF', num: 8 }
+        { id: 'pdf', titulo: 'PDF', num: 8 },
+        { id: 'relatorios', titulo: 'Relatórios (adm)', icone: '🔒' }
     ];
     const DESCR = {
         config: 'Ano, semestre do ano, dias e horários das aulas.',
@@ -102,6 +103,7 @@
         if (ui.pagina === 'disciplinas') renderLista('disciplina');
         if (ui.pagina === 'grade') renderGradePagina();
         if (ui.pagina === 'pdf') renderPdfInfo();
+        if (ui.pagina === 'relatorios') renderRelatorios();
     }
 
     // ================================================================ configuração
@@ -112,6 +114,7 @@
         $('#cfg-metade').value = String(c.metade);
         $('#cfg-dias').innerHTML = N.DIAS_SEMANA.map((d) => `<label><input type="checkbox" value="${esc(d)}"${c.dias.includes(d) ? ' checked' : ''}> ${esc(d)}</label>`).join('');
         $('#cfg-horarios').value = c.horarios.map((h) => `${h.ini}-${h.fim}`).join('\n');
+        renderCalendario();
         $('#cfg-codigos').innerHTML = `<table class="lista" style="font-size:.82rem"><thead><tr><th>Horário</th>${c.dias.map((d) => `<th>${esc(d)}</th>`).join('')}</tr></thead><tbody>
             ${c.horarios.map((h, j) => `<tr><td>${esc(h.ini)}–${esc(h.fim)}</td>${c.dias.map((_, i) => `<td><b>${N.codigoHorario(c, i, j)}</b></td>`).join('')}</tr>`).join('')}</tbody></table>`;
     }
@@ -148,7 +151,7 @@
             ${['manha', 'tarde', 'noite'].filter((t) => turnos.includes(t)).map((t) => `<button type="button" class="btn btn-secondary" data-t="${t}">${N.NOME_TURNO[t]}</button>`).join('')}
             <button type="button" class="btn btn-secondary" data-t="tudo">Tudo</button><button type="button" class="btn btn-secondary" data-t="nada">Limpar</button>
             <small class="muted" style="align-self:center">Clique ou arraste nas células; clique no dia ou na hora para marcar a coluna ou a linha.</small></div>
-            <div class="seletor-wrap"><table class="seletor${opcoes.vermelho ? ' seletor-vermelho' : ''}"><thead><tr><th></th>${cfg.dias.map((d, i) => `<th data-dia="${i}">${esc(d.slice(0, 3))}</th>`).join('')}</tr></thead>
+            <div class="seletor-wrap"><table class="seletor${opcoes.vermelho ? ' seletor-vermelho' : ''}${opcoes.roxo ? ' seletor-roxo' : ''}"><thead><tr><th></th>${cfg.dias.map((d, i) => `<th data-dia="${i}">${esc(d.slice(0, 3))}</th>`).join('')}</tr></thead>
             <tbody>${cfg.horarios.map((h, j) => `<tr class="${j && turnos[j] !== turnos[j - 1] ? 'quebra' : ''}"><th data-hora="${j}">${esc(h.ini)}</th>${cfg.dias.map((_, i) => `<td data-k="${i}|${j}" class="${set.has(`${i}|${j}`) ? 'on' : ''}"></td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
         const pinta = () => $$('td', el).forEach((td) => td.classList.toggle('on', set.has(td.dataset.k)));
         const alterna = (lista) => { const todas = lista.every((k) => set.has(k)); lista.forEach((k) => (todas ? set.delete(k) : set.add(k))); pinta(); };
@@ -235,21 +238,22 @@
     }
     // ---------- professor
     function formProfessor(id) {
-        const p = D.professores.find((x) => x.id === id) || { id: null, nome: '', email: '', indisp: [] };
+        const p = D.professores.find((x) => x.id === id) || { id: null, nome: '', email: '', indisp: [], pesquisa: [] };
         abrirJanela(p.id ? `Professor: ${p.nome}` : 'Novo professor', `
             <div class="campos"><label class="campo"><span>Nome completo</span><input type="text" name="nome" value="${esc(p.nome)}" required></label>
             <label class="campo"><span>E-mail (opcional)</span><input type="email" name="email" value="${esc(p.email)}"></label></div>
-            <fieldset><legend>Horários em que NÃO pode dar aula</legend><div id="sel-indisp"></div></fieldset>`,
+            <fieldset><legend>Horários em que NÃO pode dar aula</legend><div id="sel-indisp"></div></fieldset>
+            <fieldset><legend>Horários reservados para pesquisa</legend><div id="sel-pesq"></div><small>Não recebem aula; aparecem nos relatórios internos.</small></fieldset>`,
         (dlg, ctx) => {
             const nome = val(dlg, 'nome'); if (!nome) { aviso('Informe o nome.'); return false; }
-            const novo = { id: p.id || N.novoId('p'), nome, email: val(dlg, 'email'), indisp: ctx.s.valor() };
+            const novo = { id: p.id || N.novoId('p'), nome, email: val(dlg, 'email'), indisp: ctx.s.valor(), pesquisa: ctx.pq.valor() };
             if (p.id) Object.assign(D.professores.find((x) => x.id === p.id), novo); else D.professores.push(novo);
             return true;
-        }, (dlg) => ({ s: montarSeletor($('#sel-indisp', dlg), p.indisp, { vermelho: true }) }));
+        }, (dlg) => ({ s: montarSeletor($('#sel-indisp', dlg), p.indisp, { vermelho: true }), pq: montarSeletor($('#sel-pesq', dlg), p.pesquisa || [], { roxo: true }) }));
     }
     // ---------- sala
     function formSala(id) {
-        const s = D.salas.find((x) => x.id === id) || { id: null, nome: '', tipo: 'sala', capacidade: 40, responsaveis: [], politica: 'todos', autorizados: [], indisp: [] };
+        const s = D.salas.find((x) => x.id === id) || { id: null, nome: '', tipo: 'sala', capacidade: 40, responsaveis: [], politica: 'todos', autorizados: [], indisp: [], pesquisa: [] };
         abrirJanela(s.id ? s.nome : 'Nova sala ou laboratório', `
             <div class="campos"><label class="campo"><span>Nome</span><input type="text" name="nome" value="${esc(s.nome)}" required></label>
             <label class="campo"><span>Tipo</span><select name="tipo"><option value="sala"${s.tipo === 'sala' ? ' selected' : ''}>Sala de aula</option><option value="laboratorio"${s.tipo === 'laboratorio' ? ' selected' : ''}>Laboratório</option></select>
@@ -259,17 +263,18 @@
             <fieldset><legend>Aulas de outros professores (decisão dos responsáveis)</legend>
                 <select name="politica">${Object.entries(N.POLITICA).map(([k, v]) => `<option value="${k}"${s.politica === k ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>
                 <div id="bloco-aut" style="margin-top:.5rem"><small>Professores autorizados:</small>${checks('aut', D.professores, s.autorizados)}</div></fieldset>
-            <fieldset><legend>Horários em que NÃO pode ser usada</legend><div id="sel-indisp"></div></fieldset>`,
+            <fieldset><legend>Horários em que NÃO pode ser usada</legend><div id="sel-indisp"></div></fieldset>
+            <fieldset><legend>Horários reservados para pesquisa</legend><div id="sel-pesq"></div><small>Não recebem aula; aparecem na grade da sala e nos relatórios internos.</small></fieldset>`,
         (dlg, ctx) => {
             const nome = val(dlg, 'nome'); if (!nome) { aviso('Informe o nome.'); return false; }
             const novo = { id: s.id || N.novoId('s'), nome, tipo: val(dlg, 'tipo'), capacidade: Number(val(dlg, 'capacidade')) || 0, responsaveis: marcados(dlg, 'resp'),
-                politica: val(dlg, 'politica'), autorizados: marcados(dlg, 'aut'), indisp: ctx.s.valor() };
+                politica: val(dlg, 'politica'), autorizados: marcados(dlg, 'aut'), indisp: ctx.s.valor(), pesquisa: ctx.pq.valor() };
             if (s.id) Object.assign(D.salas.find((x) => x.id === s.id), novo); else D.salas.push(novo);
             return true;
         }, (dlg) => {
             const pol = $('[name=politica]', dlg), mostra = () => { $('#bloco-aut', dlg).hidden = pol.value !== 'autorizados'; };
             pol.addEventListener('change', mostra); mostra();
-            return { s: montarSeletor($('#sel-indisp', dlg), s.indisp, { vermelho: true }) };
+            return { s: montarSeletor($('#sel-indisp', dlg), s.indisp, { vermelho: true }), pq: montarSeletor($('#sel-pesq', dlg), s.pesquisa || [], { roxo: true }) };
         });
     }
     // ---------- disciplina
@@ -347,13 +352,13 @@
                 <td><b>${esc(p.nome)}</b></td>
                 <td>${D.disciplinas.filter((q) => q.professor === p.id).map((q) => `<span class="etiqueta" title="${esc(q.nome)}">${esc(q.codigo || q.nome)}</span>`).join('') || '<small>—</small>'}</td>
                 <td>${D.salas.filter((s) => s.responsaveis.includes(p.id)).map((s) => `<span class="etiqueta lab">${esc(s.nome)}</span>`).join('') || '<small>—</small>'}</td>
-                <td>${p.indisp.length ? `${p.indisp.length} horários` : '<small>—</small>'}</td>${acoes(p.id)}</tr>`).join('')}</tbody></table>` : '';
+                <td>${p.indisp.length ? `${p.indisp.length} horários` : '<small>—</small>'}${(p.pesquisa || []).length ? ` <span class="etiqueta pesq">pesquisa: ${p.pesquisa.length}</span>` : ''}</td>${acoes(p.id)}</tr>`).join('')}</tbody></table>` : '';
         } else if (tipo === 'sala') {
             html = D.salas.length ? `<table class="lista"><thead><tr><th>Sala ou laboratório</th><th>Tipo</th><th>Cap.</th><th>Responsáveis</th><th>Outros professores</th><th>Não pode</th><th></th></tr></thead><tbody>${D.salas.map((s) => `<tr>
                 <td><b>${esc(s.nome)}</b></td><td>${s.tipo === 'laboratorio' ? '<span class="etiqueta lab">laboratório</span>' : 'sala'}</td><td>${s.capacidade || '—'}</td>
                 <td>${s.responsaveis.map(nomeP).map(esc).join(', ') || '<small>—</small>'}</td>
                 <td><small>${esc(N.POLITICA[s.politica])}${s.politica === 'autorizados' && s.autorizados.length ? ': ' + s.autorizados.map(nomeP).map(esc).join(', ') : ''}</small></td>
-                <td>${s.indisp.length ? `${s.indisp.length} horários` : '<small>—</small>'}</td>${acoes(s.id)}</tr>`).join('')}</tbody></table>` : '';
+                <td>${s.indisp.length ? `${s.indisp.length} horários` : '<small>—</small>'}${(s.pesquisa || []).length ? ` <span class="etiqueta pesq">pesquisa: ${s.pesquisa.length}</span>` : ''}</td>${acoes(s.id)}</tr>`).join('')}</tbody></table>` : '';
         } else {
             const f = ($('#filtro-disc').value || '').toLowerCase();
             const lista = D.disciplinas.filter((q) => !f || [q.codigo, q.nome, nomeP(q.professor), ...q.ofertas.map((o) => N.nomeDe(D.cursos, o.curso))].join(' ').toLowerCase().includes(f));
@@ -409,6 +414,11 @@
         return !!(x && (x.indisp || []).includes(k));
     }
 
+    function celulaPesquisa(k) {
+        if (ui.visao !== 'professor' && ui.visao !== 'sala') return false;
+        const x = (ui.visao === 'professor' ? D.professores : D.salas).find((y) => y.id === ui.item);
+        return !!(x && (x.pesquisa || []).includes(k));
+    }
     function renderGradePagina() {
         const c = N.conflitos(D);
         const total = D.disciplinas.reduce((s, q) => s + (Number(q.aulas) || 0), 0);
@@ -477,12 +487,14 @@
                 const k = `${i}|${j}`;
                 const grupos = {};
                 (porCel[k] || []).forEach((idx) => { const a = alocs[idx]; const g = `${eq.grupoDe[a.disc]}|${a.sala}`; (grupos[g] = grupos[g] || []).push(idx); });
-                return `<td data-d="${i}" data-h="${j}" class="${celulaFechada(k) ? 'fechado' : ''}">${Object.values(grupos).map(chip).join('')}</td>`;
+                const pesq = celulaPesquisa(k);
+                return `<td data-d="${i}" data-h="${j}" class="${celulaFechada(k) ? 'fechado' : ''}${pesq ? ' pesquisa' : ''}"${pesq ? ' title="Reservado para pesquisa"' : ''}>${pesq && !grupos.length && !Object.keys(grupos).length ? '<small class="rotulo-pesq">pesquisa</small>' : ''}${Object.values(grupos).map(chip).join('')}</td>`;
             }).join('')}</tr>`).join('')}</tbody></table>`;
         $('#legenda').innerHTML = `<span><i style="background:var(--verde-claro);border-left:4px solid var(--verde)"></i>oferta</span>
             <span><i style="background:#fffaf0;border-left:4px solid var(--amarelo)"></i>reoferta</span>
             <span><i style="background:#fdecea;border-color:var(--perigo)"></i>conflito (passe o mouse para ver)</span>
             <span><i style="background:repeating-linear-gradient(45deg,#f6f8f8,#f6f8f8 3px,#e3e9e8 3px,#e3e9e8 6px)"></i>${{ curso: 'fora do funcionamento do curso', professor: 'professor indisponível', sala: 'sala indisponível' }[ui.visao]}</span>
+            ${ui.visao !== 'curso' ? '<span><i style="background:#f1eafc;border-color:#c9b3ef"></i>reservado para pesquisa</span>' : ''}
             <span>🔒 travada (o Aleatorizar mantém)</span>
             ${ui.editando ? '<span><b>Editando:</b> clique (ou arraste) uma aula e depois a célula de destino. Verde = sem conflito, amarelo = aviso, vermelho = conflito.</span>' : ''}`;
         ui.destaque = new Set();
@@ -667,6 +679,105 @@
         }, 30);
     }
 
+
+
+    // ================================================================ calendário acadêmico
+    function renderCalendario() {
+        const cal = D.config.calendario || {};
+        $('#cal-url').value = cal.url || '';
+        $('#cal-abrir').href = cal.url || '#';
+        const s1 = (cal.semestres || {})[1] || {}, s2 = (cal.semestres || {})[2] || {};
+        $('#cal-s1-ini').value = s1.inicio || ''; $('#cal-s1-fim').value = s1.fim || '';
+        $('#cal-s2-ini').value = s2.inicio || ''; $('#cal-s2-fim').value = s2.fim || '';
+        const a = N.analisarCalendario(D);
+        $('#cal-resumo').textContent = `${cal.origem === 'embutido' ? 'dados embutidos' : 'lido do link'} em ${cal.obtidoEm ? N.dataBR(cal.obtidoEm) : '?'} · ${(cal.eventos || []).length} datas`
+            + (Number(cal.ano) !== Number(D.config.ano) ? ` · ATENÇÃO: calendário de ${cal.ano}, grade de ${D.config.ano}` : '');
+        $('#cal-eventos').innerHTML = (cal.eventos || []).length ? `<table class="lista"><thead><tr><th>Data</th><th>Dia</th><th>Tipo</th><th>Descrição</th><th>No semestre ${D.config.ano}/${D.config.metade}?</th></tr></thead><tbody>
+            ${(a ? a.eventos : cal.eventos).map((e) => `<tr><td>${N.dataBR(e.data)}</td><td>${esc(e.diaSemana || '')}</td><td><span class="etiqueta ${e.tipo === 'evento' ? '' : 'reoferta'}">${esc(N.NOME_TIPO_CAL[e.tipo] || e.tipo)}</span></td>
+                <td>${esc(e.descricao)}${e.ateHora ? ` <small>(até ${esc(e.ateHora)})</small>` : ''}</td>
+                <td>${e.foraDoPeriodo ? '<small>fora do período letivo</small>' : (e.temAula ? (e.suspende ? '<b style="color:var(--perigo)">sim, sem aula</b>' : 'sim, há aula') : '<small>dia sem aula na grade</small>')}</td></tr>`).join('')}</tbody></table>`
+            : '<p class="vazio">Nenhuma data carregada.</p>';
+    }
+    function aplicarCalendario(cal, origem) {
+        if (!cal.eventos.length && !Object.keys(cal.semestres).length) return aviso('Não achei datas no texto. Confira se copiou a página do calendário inteira.');
+        guardarHistorico();
+        const velho = D.config.calendario || {};
+        cal.url = $('#cal-url').value.trim() || velho.url;
+        cal.origem = origem;
+        [1, 2].forEach((k) => { if (!cal.semestres[k] && velho.semestres && velho.semestres[k] && Number(velho.ano) === Number(cal.ano)) cal.semestres[k] = velho.semestres[k]; });
+        D.config.calendario = cal;
+        mudou();
+        aviso(`Calendário ${cal.ano}: ${cal.eventos.length} datas (feriados, recessos, pontos) e ${Object.keys(cal.semestres).length} semestre(s) com início e fim.`, 6000);
+    }
+    async function buscarCalendario() {
+        const url = $('#cal-url').value.trim();
+        if (!/^https?:\/\//.test(url)) return aviso('Informe o link do calendário acadêmico vigente.');
+        D.config.calendario.url = url; salvarLocal();
+        try {
+            const r = await fetch(url, { mode: 'cors' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const html = await r.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            aplicarCalendario(N.lerCalendarioTexto(doc.body ? doc.body.innerText || doc.body.textContent : html, D.config.ano, url), 'link');
+        } catch (e) {
+            $('#cal-colar').open = true;
+            aviso('O site da UFPel não deixa outra página ler o calendário direto (bloqueio do navegador). Abra o link, copie a página e cole no campo que abriu.', 8000);
+        }
+    }
+
+
+    // ================================================================ relatórios internos (só administrador)
+    // Atenção: o login é só uma porta na interface (o app roda inteiro no navegador); não protege os dados do arquivo.
+    const ADM = { usuario: 'admin', senha: 'admin' };
+    const ehAdmin = () => { try { return sessionStorage.getItem('gh_admin') === '1'; } catch (e) { return !!ui.admin; } };
+    function entrarAdmin(u, s) {
+        if (u !== ADM.usuario || s !== ADM.senha) return false;
+        ui.admin = true; try { sessionStorage.setItem('gh_admin', '1'); } catch (e) { /* ok */ }
+        return true;
+    }
+    function sairAdmin() { ui.admin = false; try { sessionStorage.removeItem('gh_admin'); } catch (e) { /* ok */ } renderRelatorios(); }
+    const barra = (pct, cor) => `<span class="barra-uso"><i style="width:${Math.min(100, pct)}%;background:${cor}"></i></span>`;
+    function renderRelatorios() {
+        const el = $('#relatorios-conteudo');
+        if (!ehAdmin()) {
+            el.innerHTML = `<form class="card" id="form-admin" autocomplete="on" style="max-width:420px">
+                <h2>🔒 Acesso do administrador</h2><p class="muted">Relatórios internos: carga horária dos professores, uso das salas e laboratórios e horários de pesquisa.</p>
+                <div class="campos"><label class="campo"><span>Usuário</span><input type="text" name="usuario" autocomplete="username"></label>
+                <label class="campo"><span>Senha</span><input type="password" name="senha" autocomplete="current-password"></label></div>
+                <p class="muted" id="adm-erro" style="color:var(--perigo)"></p>
+                <button type="submit" class="btn btn-primary">Entrar</button></form>`;
+            $('#form-admin').addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (entrarAdmin($('#form-admin [name=usuario]').value.trim(), $('#form-admin [name=senha]').value)) renderRelatorios();
+                else $('#adm-erro').textContent = 'Usuário ou senha não conferem.';
+            });
+            return;
+        }
+        const r = N.relatorios(D);
+        const maxP = Math.max(1, ...r.professores.map((p) => p.total));
+        el.innerHTML = `<div class="card"><div class="card-topo"><h2>Relatórios internos</h2>
+            <div class="barra" style="margin:0"><button type="button" class="btn btn-primary btn-sm" data-acao="pdf-relatorios">📄 PDF dos relatórios</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-acao="sair-admin">Sair</button></div></div>
+            <p class="muted">${esc(D.cursos[0] ? D.cursos[0].nome : '')} · ${D.config.ano}/${D.config.metade} · semana com ${r.horasSemana} h de aula possíveis por sala (${D.config.dias.length} dias × ${D.config.horarios.length} períodos).
+            Professores: carga nesta grade + horários ocupados nos outros cursos da mesma unidade carregados. Aulas = períodos.</p></div>
+            <div class="card"><h2>Professores — quem trabalha mais</h2><div class="tabela-wrap"><table class="lista"><thead><tr><th>#</th><th>Professor</th><th>Aulas aqui</th><th>Horas aqui</th><th>Horas em outros cursos</th><th>Total (h/sem.)</th><th></th><th>Pesquisa (h/sem.)</th><th>Disciplinas</th><th>Dias / turnos</th><th>Responsável por</th></tr></thead><tbody>
+            ${r.professores.map((p, i) => `<tr><td>${i + 1}</td><td><b>${esc(p.nome)}</b></td><td>${p.aulas}</td><td>${p.horas}</td><td>${p.outrosCursosHoras || '—'}</td><td><b>${p.total}</b></td>
+                <td style="min-width:110px">${barra(100 * p.total / maxP, 'var(--verde)')}</td><td>${p.pesquisaHoras ? `<span class="etiqueta pesq">${p.pesquisaHoras}</span>` : '—'}</td>
+                <td><small>${esc(p.disciplinas.join(', ')) || '—'}</small></td><td><small>${esc(p.dias.join(', '))}${p.turnos.length ? ' · ' + esc(p.turnos.join('/')) : ''}</small></td>
+                <td><small>${esc(p.responsavelPor.join(', ')) || '—'}</small></td></tr>`).join('')}</tbody></table></div></div>
+            <div class="card"><h2>Salas e laboratórios — os mais usados para ensino</h2><div class="tabela-wrap"><table class="lista"><thead><tr><th>#</th><th>Sala ou laboratório</th><th>Tipo</th><th>Ensino aqui (h)</th><th>Ensino outros cursos (h)</th><th>Uso p/ ensino</th><th></th><th>Pesquisa (h)</th><th>Indisponível (h)</th><th>Livre (h)</th><th>Responsáveis</th></tr></thead><tbody>
+            ${r.salas.map((s, i) => `<tr><td>${i + 1}</td><td><b>${esc(s.nome)}</b></td><td>${s.tipo === 'laboratorio' ? '<span class="etiqueta lab">laboratório</span>' : 'sala'}</td>
+                <td>${s.ensinoHoras}</td><td>${s.outrosCursosHoras || '—'}</td><td><b>${String(s.pctEnsino).replace('.', ',')}%</b></td>
+                <td style="min-width:130px"><span class="barra-uso"><i style="width:${s.pctEnsino}%;background:var(--verde)"></i><i style="width:${s.pctPesquisa}%;background:#9b7bd8"></i></span></td>
+                <td>${s.pesquisaHoras ? `<span class="etiqueta pesq">${s.pesquisaHoras}</span>` : '—'}</td><td>${s.indispHoras || '—'}</td><td>${s.livreHoras}</td><td><small>${esc(s.responsaveis.join(', ')) || '—'}</small></td></tr>`).join('')}</tbody></table></div>
+            <div class="legenda"><span><i style="background:var(--verde)"></i>ensino</span><span><i style="background:#9b7bd8"></i>pesquisa</span></div></div>
+            <div class="card"><h2>Quando está reservado para pesquisa</h2>${(() => {
+                const linhas = [...D.salas.map((s) => ({ quem: s.nome, tipo: 'Sala/lab.', l: s.pesquisa || [] })), ...D.professores.map((p) => ({ quem: p.nome, tipo: 'Professor', l: p.pesquisa || [] }))].filter((x) => x.l.length);
+                return linhas.length ? `<table class="lista"><thead><tr><th>Quem</th><th></th><th>Horários (código)</th></tr></thead><tbody>${linhas.map((x) => `<tr><td><b>${esc(x.quem)}</b></td><td>${x.tipo}</td>
+                    <td class="codigos" style="white-space:normal">${x.l.map((k) => { const [d, h] = N.separa(k); return D.config.horarios[h] && d < D.config.dias.length ? N.codigoHorario(D.config, d, h) : null; }).filter(Boolean).sort().join(' ')}</td></tr>`).join('')}</tbody></table>`
+                    : '<p class="vazio">Nenhum horário reservado para pesquisa. Marque em Salas e laboratórios ou em Professores (campo “Horários reservados para pesquisa”).</p>';
+            })()}</div>`;
+    }
 
     // ================================================================ curso (catálogo da UFPel)
     const unidadesCat = () => (typeof CATALOGO_UFPEL !== 'undefined' ? CATALOGO_UFPEL.unidades : []);
@@ -885,6 +996,16 @@
                     break;
                 }
                 case 'exportar-json': exportarJson(); break;
+                case 'sair-admin': sairAdmin(); break;
+                case 'pdf-relatorios': try { GeradorPDF.relatorios(D).save(`relatorios-internos-${D.config.ano}-${D.config.metade}.pdf`); aviso('PDF dos relatórios gerado.'); } catch (e) { aviso('Não consegui gerar: ' + esc(e.message)); } break;
+                case 'cal-buscar': buscarCalendario(); break;
+                case 'cal-2027': guardarHistorico(); D.config.calendario = N.calendario2027(); mudou(); aviso('Calendário acadêmico 2027 (dados embutidos, extraídos do link da CRA em 17/11/2026).'); break;
+                case 'cal-ler-texto': aplicarCalendario(N.lerCalendarioTexto($('#cal-texto').value, D.config.ano, $('#cal-url').value.trim()), 'texto colado do link'); break;
+                case 'cal-salvar-datas': {
+                    const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+                    const sem = {}; [[1, 's1'], [2, 's2']].forEach(([k, id]) => { const i = $(`#cal-${id}-ini`).value.trim(), f = $(`#cal-${id}-fim`).value.trim(); if (ok(i) && ok(f)) sem[k] = { inicio: i, fim: f }; });
+                    guardarHistorico(); D.config.calendario.semestres = sem; D.config.calendario.url = $('#cal-url').value.trim() || D.config.calendario.url; mudou(); aviso('Datas do semestre salvas.'); break;
+                }
                 case 'importar-json': modoImportar = 'perguntar'; $('#arquivo-entrada').click(); break;
                 case 'importar-json-outro': modoImportar = 'outro'; $('#arquivo-entrada').click(); break;
                 case 'mega-salvar': megaSalvar(); break;
@@ -972,7 +1093,7 @@
     function gerarPdf() {
         if (typeof GeradorPDF === 'undefined' || !window.jspdf) return aviso('A biblioteca de PDF não carregou. Recarregue a página.');
         const op = {};
-        ['capa', 'curso', 'professor', 'sala', 'relacao', 'disciplinas', 'conflitos', 'vazios'].forEach((k) => { op[k] = $(`#pdf-${k}`).checked; });
+        ['capa', 'curso', 'professor', 'sala', 'relacao', 'disciplinas', 'conflitos', 'calendario', 'vazios'].forEach((k) => { op[k] = $(`#pdf-${k}`).checked; });
         try {
             const doc = GeradorPDF.gerar(D, op);
             doc.save(nomeArquivo('pdf'));

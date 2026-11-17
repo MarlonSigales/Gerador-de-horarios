@@ -24,6 +24,7 @@
  *  - professores e laboratórios já usados pela grade de outro curso (dados.externos, vindos do MEGA ou de JSON importado)
  *    não podem ser usados no mesmo horário, a não ser na mesma disciplina (mesmo código), mesma sala: turma conjunta;
  *  - responsáveis do laboratório têm prioridade nele e decidem se aceitam aulas de outros professores
+ *  - horários reservados para pesquisa (sala.pesquisa, professor.pesquisa) não recebem aula;
  *    (sala.politica: 'todos' | 'autorizados' (lista sala.autorizados) | 'responsaveis').
  */
 
@@ -354,6 +355,186 @@ const Nucleo = (() => {
         return d;
     }
 
+
+    // ================================================================ CALENDÁRIO ACADÊMICO (feriados, dias letivos, aulas perdidas)
+
+    /** Calendário acadêmico 2027 da UFPel (CRA), extraído em 17/11/2026 de CALENDARIO_URL_2027. */
+    const CALENDARIO_URL_2027 = 'https://wp.ufpel.edu.br/cra/calendarios-academicos/calendario-academico-2027/';
+    function calendario2027() {
+        const e = (data, tipo, descricao, ateHora) => ({ data, tipo, descricao, ateHora: ateHora || '' });
+        return {
+            url: CALENDARIO_URL_2027, ano: 2027, obtidoEm: '2026-11-17', origem: 'embutido',
+            semestres: { 1: { inicio: '2027-03-08', fim: '2027-07-10' }, 2: { inicio: '2027-08-02', fim: '2027-12-04' } },
+            eventos: [
+                e('2027-01-01', 'feriado', 'Confraternização Universal'), e('2027-02-02', 'feriado', 'Nossa Senhora dos Navegantes'),
+                e('2027-02-08', 'recesso', 'Recesso'), e('2027-02-09', 'recesso', 'Recesso: Carnaval'),
+                e('2027-02-10', 'ponto', 'Quarta-Feira de Cinzas (ponto facultativo até as 14 horas)', '14:00'),
+                e('2027-03-26', 'feriado', 'Sexta-Feira Santa'), e('2027-03-28', 'feriado', 'Páscoa'), e('2027-04-21', 'feriado', 'Tiradentes'),
+                e('2027-05-01', 'feriado', 'Dia do Trabalhador'), e('2027-05-12', 'evento', 'Mostra de Cursos'),
+                e('2027-05-27', 'feriado', 'Corpus Christi'), e('2027-05-28', 'recesso', 'Recesso administrativo e acadêmico (ponto facultativo)'),
+                e('2027-09-07', 'feriado', 'Independência'), e('2027-09-20', 'feriado', 'Dia do Gaúcho'), e('2027-09-29', 'evento', 'Mundo UFPel'),
+                e('2027-10-12', 'feriado', 'Nossa Senhora Aparecida'),
+                ...['18', '19', '20', '21', '22', '23'].map((d) => e(`2027-10-${d}`, 'evento', 'SIIEPE — Semana Integrada de Inovação, Ensino, Pesquisa e Extensão')),
+                e('2027-10-28', 'recesso', 'Recesso: Dia do Servidor Público'), e('2027-11-02', 'feriado', 'Finados'),
+                e('2027-11-15', 'feriado', 'Proclamação da República'), e('2027-11-20', 'feriado', 'Dia Nacional de Zumbi e da Consciência Negra'),
+                e('2027-12-20', 'recesso', 'Início do período de recesso'), e('2027-12-24', 'recesso', 'Recesso: Véspera de Natal'),
+                e('2027-12-25', 'feriado', 'Natal'), e('2027-12-31', 'recesso', 'Recesso: Véspera de Ano Novo')
+            ]
+        };
+    }
+    const SUSPENDE = { feriado: true, recesso: true, ponto: true, evento: false };
+    const NOME_TIPO_CAL = { feriado: 'Feriado', recesso: 'Recesso', ponto: 'Ponto facultativo', evento: 'Evento (não suspende aulas)' };
+    const FERIADOS_NOMES = /confraterniza|navegantes|sexta-feira santa|p[áa]scoa|tiradentes|trabalh|corpus christi|independ[êe]ncia|ga[úu]cho|aparecida|finados|proclama|zumbi|consci[êe]ncia negra|natal\b|feriado/i;
+
+    /**
+     * Lê o texto do calendário acadêmico (copiado da página do link vigente). Tolerante ao formato:
+     * cada data DD/MM ou DD/MM/AAAA abre uma entrada com o texto até a próxima data.
+     */
+    function lerCalendarioTexto(texto, anoPadrao, url) {
+        const t = String(texto || '').replace(/\r/g, '');
+        const re = /(?<![\d/])(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?!\d)/g; // não pega "27/1" de "2027/1"
+        const marcas = [];
+        let m;
+        while ((m = re.exec(t))) marcas.push({ i: m.index, fimI: re.lastIndex, d: +m[1], mes: +m[2], ano: m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : null });
+        const cal = { url: url || '', ano: anoPadrao, obtidoEm: new Date().toISOString().slice(0, 10), origem: 'texto', semestres: {}, eventos: [] };
+        const anos = {};
+        marcas.forEach((mk) => { if (mk.ano) anos[mk.ano] = (anos[mk.ano] || 0) + 1; });
+        const anoMaisComum = Number(Object.keys(anos).sort((a, b) => anos[b] - anos[a])[0]) || anoPadrao;
+        cal.ano = anoMaisComum;
+        marcas.forEach((mk, k) => {
+            if (mk.d < 1 || mk.d > 31 || mk.mes < 1 || mk.mes > 12) return;
+            const ano = mk.ano || anoMaisComum;
+            const desc = t.slice(mk.fimI, k + 1 < marcas.length ? marcas[k + 1].i : t.length).replace(/^[\s\-–—:|,.()a-zçáéíóúâêôãõ]{0,25}?(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+            if (!desc) return;
+            const data = `${ano}-${String(mk.mes).padStart(2, '0')}-${String(mk.d).padStart(2, '0')}`;
+            const sem = desc.match(/(\d{4})\/([12])/);
+            if (/in[íi]cio do semestre/i.test(desc) && sem) { (cal.semestres[sem[2]] = cal.semestres[sem[2]] || {}).inicio = data; return; }
+            if (/[úu]ltimo dia letivo/i.test(desc) && sem) { (cal.semestres[sem[2]] = cal.semestres[sem[2]] || {}).fim = data; return; }
+            let tipo = null;
+            if (/recesso/i.test(desc)) tipo = 'recesso';
+            else if (/ponto facultativo/i.test(desc)) tipo = 'ponto';
+            else if (FERIADOS_NOMES.test(desc) && desc.length < 90) tipo = 'feriado';
+            else if (/SIIEPE|semana acad[êe]mica|aulas suspensas|atividades suspensas/i.test(desc)) tipo = /suspens/i.test(desc) ? 'recesso' : 'evento';
+            if (!tipo) return;
+            const ate = desc.match(/at[ée] (?:as |às )?(\d{1,2})\s*(?:h|horas)/i);
+            if (!cal.eventos.some((x) => x.data === data && x.descricao === desc)) cal.eventos.push({ data, tipo, descricao: desc, ateHora: ate ? `${ate[1].padStart(2, '0')}:00` : '' });
+        });
+        cal.eventos.sort((a, b) => a.data.localeCompare(b.data));
+        return cal;
+    }
+
+    const NOMES_DIA_JS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const dataUTC = (iso) => { const [a, m, d] = iso.split('-').map(Number); return new Date(Date.UTC(a, m - 1, d)); };
+    const isoDe = (dt) => dt.toISOString().slice(0, 10);
+    const dataBR = (iso) => iso.split('-').reverse().join('/');
+
+    /**
+     * Análise do semestre letivo: feriados e recessos que caem nos dias de aula, dias letivos por dia da semana e as
+     * disciplinas mais prejudicadas (aulas perdidas pela grade atual). Devolve null sem calendário/semestre.
+     */
+    function analisarCalendario(dados) {
+        const cal = dados.config.calendario;
+        const sem = cal && cal.semestres && cal.semestres[String(dados.config.metade)];
+        if (!sem || !sem.inicio || !sem.fim) return null;
+        const cfg = dados.config, idx = indices(dados);
+        const ini = dataUTC(sem.inicio), fim = dataUTC(sem.fim);
+        const evPorData = {};
+        (cal.eventos || []).forEach((e) => { (evPorData[e.data] = evPorData[e.data] || []).push(e); });
+        const porDia = cfg.dias.map((nome) => ({ dia: nome, total: 0, perdidos: 0, parciais: 0, letivos: 0, datasPerdidas: [] }));
+        const eventos = [];
+        for (let dt = new Date(ini); dt <= fim; dt.setUTCDate(dt.getUTCDate() + 1)) {
+            const iso = isoDe(dt), nome = NOMES_DIA_JS[dt.getUTCDay()], d = cfg.dias.indexOf(nome);
+            const evs = evPorData[iso] || [];
+            evs.forEach((e) => eventos.push(Object.assign({}, e, { diaSemana: nome, temAula: d >= 0, suspende: !!SUSPENDE[e.tipo] })));
+            if (d < 0) continue;
+            const pd = porDia[d];
+            pd.total++;
+            const susp = evs.filter((e) => SUSPENDE[e.tipo]);
+            if (susp.some((e) => !e.ateHora)) { pd.perdidos++; pd.datasPerdidas.push(iso); }
+            else if (susp.length) pd.parciais++;
+            else pd.letivos++;
+        }
+        // eventos fora do período (para a lista de feriados do ano) também entram, marcados
+        (cal.eventos || []).forEach((e) => { if (e.data < sem.inicio || e.data > sem.fim) eventos.push(Object.assign({}, e, { diaSemana: NOMES_DIA_JS[dataUTC(e.data).getUTCDay()], foraDoPeriodo: true, suspende: !!SUSPENDE[e.tipo] })); });
+        eventos.sort((a, b) => a.data.localeCompare(b.data));
+
+        // aulas perdidas por alocação
+        const perdeu = (d, h, iso) => (evPorData[iso] || []).some((e) => SUSPENDE[e.tipo] && (!e.ateHora || minutos(cfg.horarios[h].ini) < minutos(e.ateHora)));
+        const datasDoDia = cfg.dias.map(() => []);
+        for (let dt = new Date(ini); dt <= fim; dt.setUTCDate(dt.getUTCDate() + 1)) { const d = cfg.dias.indexOf(NOMES_DIA_JS[dt.getUTCDay()]); if (d >= 0) datasDoDia[d].push(isoDe(dt)); }
+        const porDisc = {};
+        ((dados.grade && dados.grade.alocacoes) || []).forEach((a) => {
+            const q = idx.disc[a.disc];
+            if (!q || !cfg.horarios[a.h] || a.d >= cfg.dias.length) return;
+            const r = (porDisc[q.id] = porDisc[q.id] || { disc: q.id, codigo: q.codigo, nome: q.nome, professor: nomeDe(dados.professores, q.professor) || '', aulasSemana: 0, dias: new Set(), previstas: 0, perdidas: 0, datas: new Set() });
+            r.aulasSemana++; r.dias.add(cfg.dias[a.d]);
+            datasDoDia[a.d].forEach((iso) => { r.previstas++; if (perdeu(a.d, a.h, iso)) { r.perdidas++; r.datas.add(iso); } });
+        });
+        const disciplinas = Object.values(porDisc).map((r) => {
+            const q = idx.disc[r.disc];
+            const exigidas = Number(q.horas) || (Number(q.creditos) || Number(q.aulas) || 0) * 15;
+            const dadas = r.previstas - r.perdidas;
+            return { disc: r.disc, codigo: r.codigo, nome: r.nome, professor: r.professor, aulasSemana: r.aulasSemana, dias: [...r.dias].join(', '),
+                previstas: r.previstas, perdidas: r.perdidas, dadas, pct: r.previstas ? Math.round(1000 * r.perdidas / r.previstas) / 10 : 0,
+                exigidas, saldo: dadas - exigidas, datas: [...r.datas].sort().map(dataBR) };
+        }).sort((a, b) => b.perdidas - a.perdidas || b.pct - a.pct || a.saldo - b.saldo);
+        return { url: cal.url, inicio: sem.inicio, fim: sem.fim, ano: cal.ano, eventos, porDia, disciplinas, semanas: Math.round((fim - ini) / 6048e5 * 10) / 10 };
+    }
+
+    // ================================================================ RELATÓRIOS INTERNOS (carga horária e uso)
+
+    /**
+     * Carga horária dos professores e uso das salas/laboratórios nesta grade (e, para os professores, nos outros cursos
+     * da mesma unidade carregados em dados.externos). Aula = 1 período (duração tirada dos horários).
+     */
+    function relatorios(dados) {
+        const cfg = dados.config, idx = indices(dados), eq = gruposEquivalentes(dados);
+        const dur = (h) => (minutos(cfg.horarios[h].fim) - minutos(cfg.horarios[h].ini)) / 60;
+        const totalSlots = cfg.dias.length * cfg.horarios.length;
+        const horasSlots = cfg.dias.length * cfg.horarios.reduce((t, h, j) => t + dur(j), 0);
+        // aulas desta grade: turmas conjuntas (equivalentes no mesmo horário e sala) contam uma vez para professor e sala
+        const vistos = new Set(), aulas = [];
+        ((dados.grade && dados.grade.alocacoes) || []).forEach((a) => {
+            const q = idx.disc[a.disc]; if (!q || !cfg.horarios[a.h]) return;
+            const ch = `${eq.grupoDe[a.disc]}|${a.d}|${a.h}|${a.sala}`;
+            if (vistos.has(ch)) return; vistos.add(ch);
+            aulas.push({ a, q });
+        });
+        const ext = ocupacoesExternas(dados);
+        const professores = (dados.professores || []).map((p) => {
+            const minhas = aulas.filter((x) => x.q.professor === p.id);
+            const horas = minhas.reduce((t, x) => t + dur(x.a.h), 0);
+            const meusK = new Set(minhas.map((x) => chave(x.a.d, x.a.h))); // turma conjunta: mesmo horário aqui e lá conta uma vez
+            const foraK = Object.keys(ext.prof[p.id] || {}).filter((k) => !meusK.has(k));
+            const fora = foraK.length; // horários ocupados em outros cursos (mesma unidade)
+            const foraHoras = foraK.reduce((t, k) => t + dur(separa(k)[1]), 0);
+            const pesquisaH = (p.pesquisa || []).reduce((t, k) => { const h = separa(k)[1]; return cfg.horarios[h] ? t + dur(h) : t; }, 0);
+            return { id: p.id, nome: p.nome, aulas: minhas.length, horas: Math.round(horas * 10) / 10, disciplinas: [...new Set(minhas.map((x) => x.q.codigo || x.q.nome))],
+                dias: [...new Set(minhas.map((x) => cfg.dias[x.a.d]))], turnos: [...new Set(minhas.map((x) => NOME_TURNO[turno(cfg.horarios[x.a.h])]))],
+                outrosCursos: fora, outrosCursosHoras: Math.round(foraHoras * 10) / 10, total: Math.round((horas + foraHoras) * 10) / 10,
+                pesquisaHoras: Math.round(pesquisaH * 10) / 10, responsavelPor: (dados.salas || []).filter((s) => (s.responsaveis || []).includes(p.id)).map((s) => s.nome) };
+        }).sort((a, b) => b.total - a.total || b.horas - a.horas);
+        const salas = (dados.salas || []).map((s) => {
+            const minhas = aulas.filter((x) => x.a.sala === s.id);
+            const ensinoH = minhas.reduce((t, x) => t + dur(x.a.h), 0);
+            const foraKeys = Object.keys(ext.sala[s.id] || {}).filter((k) => !minhas.some((x) => chave(x.a.d, x.a.h) === k));
+            const foraH = foraKeys.reduce((t, k) => t + dur(separa(k)[1]), 0);
+            const pesq = (s.pesquisa || []).filter((k) => cfg.horarios[separa(k)[1]] && separa(k)[0] < cfg.dias.length);
+            const pesqH = pesq.reduce((t, k) => t + dur(separa(k)[1]), 0);
+            const indisp = (s.indisp || []).filter((k) => cfg.horarios[separa(k)[1]] && separa(k)[0] < cfg.dias.length && !pesq.includes(k));
+            const indispH = indisp.reduce((t, k) => t + dur(separa(k)[1]), 0);
+            const usoEnsino = ensinoH + foraH;
+            const livreH = Math.max(0, horasSlots - usoEnsino - pesqH - indispH);
+            const pct = (v) => (horasSlots ? Math.round(1000 * v / horasSlots) / 10 : 0);
+            return { id: s.id, nome: s.nome, tipo: s.tipo, responsaveis: (s.responsaveis || []).map((p) => nomeDe(dados.professores, p)),
+                ensinoAulas: minhas.length, ensinoHoras: Math.round(ensinoH * 10) / 10, outrosCursosHoras: Math.round(foraH * 10) / 10,
+                pesquisaHoras: Math.round(pesqH * 10) / 10, indispHoras: Math.round(indispH * 10) / 10, livreHoras: Math.round(livreH * 10) / 10,
+                pctEnsino: pct(usoEnsino), pctPesquisa: pct(pesqH), pctLivre: pct(livreH),
+                disciplinas: [...new Set(minhas.map((x) => x.q.codigo || x.q.nome))], pesquisa: pesq };
+        }).sort((a, b) => b.pctEnsino - a.pctEnsino || b.ensinoHoras - a.ensinoHoras);
+        return { professores, salas, horasSemana: Math.round(horasSlots * 10) / 10, totalSlots };
+    }
+
     // ================================================================ CONFLITOS
 
     /**
@@ -381,6 +562,8 @@ const Nucleo = (() => {
             const prof = idx.prof[disc.professor], sala = idx.sala[a.sala];
             if (!sala) add('sala', 'erro', `${nomeDisc(disc)} em ${onde}: sem sala (ou sala removida).`, [i]);
             if (prof && (prof.indisp || []).includes(k)) add('prof-indisp', 'erro', `${prof.nome} não pode dar aula em ${onde} (${nomeDisc(disc)}).`, [i]);
+            if (sala && (sala.pesquisa || []).includes(k)) add('pesquisa-sala', 'erro', `${sala.nome} está reservada para pesquisa em ${onde} (${nomeDisc(disc)}).`, [i]);
+            if (prof && (prof.pesquisa || []).includes(k)) add('pesquisa-prof', 'erro', `${prof.nome} tem horário reservado para pesquisa em ${onde} (${nomeDisc(disc)}).`, [i]);
             if (sala && (sala.indisp || []).includes(k)) add('sala-indisp', 'erro', `${sala.nome} não pode ser usada em ${onde} (${nomeDisc(disc)}).`, [i]);
             if ((disc.fixos || []).length && !disc.fixos.includes(k)) add('fixo', 'erro', `${nomeDisc(disc)} só pode ocorrer nos horários fixos dela; está em ${onde}.`, [i]);
             const jan = janelaCursos(dados, disc, idx);
@@ -545,7 +728,7 @@ const Nucleo = (() => {
                 if (jan) { if (!jan.size) semJanela = true; permitidos = new Set([...permitidos].filter((k) => jan.has(k))); }
             });
             const antesProf = permitidos.size;
-            profs.forEach((p) => { const ind = new Set((idx.prof[p] && idx.prof[p].indisp) || []); permitidos = new Set([...permitidos].filter((k) => !ind.has(k))); });
+            profs.forEach((p) => { const ind = new Set([...((idx.prof[p] && idx.prof[p].indisp) || []), ...((idx.prof[p] && idx.prof[p].pesquisa) || [])]); permitidos = new Set([...permitidos].filter((k) => !ind.has(k))); });
             const turmas = [], turmasTodas = [];
             discs.forEach((d) => turmasDe(dados, d).forEach((t) => {
                 if (!turmas.includes(t.id)) turmas.push(t.id); // regra: mesmo semestre não tem duas aulas no mesmo horário
@@ -620,7 +803,7 @@ const Nucleo = (() => {
                                 let conj = true;
                                 for (let h = h0; h < h0 + n; h++) {
                                     const k = chave(d, h);
-                                    if (!livre(salaOc, s, k) || (sala.indisp || []).includes(k) || (u.salaBloq[s] && u.salaBloq[s].has(k))) return;
+                                    if (!livre(salaOc, s, k) || (sala.indisp || []).includes(k) || (sala.pesquisa || []).includes(k) || (u.salaBloq[s] && u.salaBloq[s].has(k))) return;
                                     if (u.profConj[k] && !u.profConj[k].has(normNome(sala.nome))) return; // o professor estaria noutra sala com o outro curso
                                     if (!u.profConj[k]) conj = false;
                                 }
@@ -681,7 +864,7 @@ const Nucleo = (() => {
     function dadosVazios() {
         return {
             versao: 1,
-            config: { titulo: 'Grade horária', unidade: { id: 444, nome: 'Centro de Engenharias' }, ano: new Date().getFullYear() + 1, metade: 1, dias: DIAS_SEMANA.slice(0, 5), horarios: horariosPadrao() },
+            config: { titulo: 'Grade horária', unidade: { id: 444, nome: 'Centro de Engenharias' }, calendario: calendario2027(), ano: new Date().getFullYear() + 1, metade: 1, dias: DIAS_SEMANA.slice(0, 5), horarios: horariosPadrao() },
             cursos: [], professores: [], salas: [], disciplinas: [],
             grade: { alocacoes: [], naoAlocadas: [], geradaEm: null },
             externos: []
@@ -708,11 +891,12 @@ const Nucleo = (() => {
         if (!Array.isArray(cfg.horarios) || !cfg.horarios.length) cfg.horarios = horariosPadrao();
         const arr = (v) => Array.isArray(v) ? v : [];
         if (!cfg.unidade || typeof cfg.unidade !== 'object' || !cfg.unidade.nome) cfg.unidade = { id: 444, nome: 'Centro de Engenharias' };
+        if (!cfg.calendario || typeof cfg.calendario !== 'object' || !Array.isArray(cfg.calendario.eventos)) cfg.calendario = calendario2027();
         d.cursos = arr(x.cursos).map((c) => ({ id: c.id || novoId('c'), cod: c.cod || null, nome: c.nome || 'Curso', semestres: Number(c.semestres) || 10, oferta: arr(c.oferta), reoferta: arr(c.reoferta),
             preferencias: (c.preferencias && typeof c.preferencias === 'object') ? Object.fromEntries(Object.entries(c.preferencias).map(([k, v]) => [k, arr(v).filter((t) => NOME_TURNO[t])])) : {} }));
-        d.professores = arr(x.professores).map((p) => ({ id: p.id || novoId('p'), nome: p.nome || 'Professor', email: p.email || '', indisp: arr(p.indisp) }));
+        d.professores = arr(x.professores).map((p) => ({ id: p.id || novoId('p'), nome: p.nome || 'Professor', email: p.email || '', indisp: arr(p.indisp), pesquisa: arr(p.pesquisa) }));
         d.salas = arr(x.salas).map((s) => ({ id: s.id || novoId('s'), nome: s.nome || 'Sala', tipo: s.tipo === 'laboratorio' ? 'laboratorio' : 'sala', capacidade: Number(s.capacidade) || 0,
-            responsaveis: arr(s.responsaveis), politica: POLITICA[s.politica] ? s.politica : 'todos', autorizados: arr(s.autorizados), indisp: arr(s.indisp) }));
+            responsaveis: arr(s.responsaveis), politica: POLITICA[s.politica] ? s.politica : 'todos', autorizados: arr(s.autorizados), indisp: arr(s.indisp), pesquisa: arr(s.pesquisa) }));
         d.disciplinas = arr(x.disciplinas).map((q) => ({ id: q.id || novoId('d'), codigo: q.codigo || '', nome: q.nome || 'Disciplina', professor: q.professor || '',
             aulas: Number(q.aulas) || 0, blocos: q.blocos || '', salas: arr(q.salas), fixos: arr(q.fixos), equivalentes: arr(q.equivalentes),
             ofertas: arr(q.ofertas).map((o) => ({ curso: o.curso, semestre: Number(o.semestre) >= 0 && o.semestre !== '' && o.semestre !== undefined ? Number(o.semestre) : 1, carater: CARATER[o.carater] ? o.carater : 'obrigatoria' })),
@@ -762,8 +946,8 @@ const Nucleo = (() => {
         const novo = copia(dados);
         novo.config = Object.assign({}, velha, novaCfg);
         novo.cursos.forEach((c) => { c.oferta = lista(c.oferta); c.reoferta = lista(c.reoferta); });
-        novo.professores.forEach((p) => { p.indisp = lista(p.indisp); });
-        novo.salas.forEach((s) => { s.indisp = lista(s.indisp); });
+        novo.professores.forEach((p) => { p.indisp = lista(p.indisp); p.pesquisa = lista(p.pesquisa); });
+        novo.salas.forEach((s) => { s.indisp = lista(s.indisp); s.pesquisa = lista(s.pesquisa); });
         novo.disciplinas.forEach((q) => { q.fixos = lista(q.fixos); });
         const antes = novo.grade.alocacoes.length;
         novo.grade.alocacoes = novo.grade.alocacoes.map((a) => {
@@ -786,7 +970,7 @@ const Nucleo = (() => {
         CARATER, POLITICA, DIAS_SEMANA, NOME_TURNO,
         chave, separa, copia, rngSemente, turno, situacao, todasChaves, seguidas, indices, gruposEquivalentes, janelaCursos,
         profPodeNaSala, salasPermitidas, blocos, turmasDe, sigla, nomeDisc, nomeDe, rotuloHorario,
-        codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
+        relatorios, CALENDARIO_URL_2027, calendario2027, lerCalendarioTexto, analisarCalendario, NOME_TIPO_CAL, dataBR, codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
         novoId, dadosVazios, horariosPadrao, normalizar, excluir, chavesTurno, remapearConfig
     };
 })();

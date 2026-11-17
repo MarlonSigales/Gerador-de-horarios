@@ -42,7 +42,7 @@ const Exemplo = (() => {
             { id: 's102', nome: 'Sala 102', tipo: 'sala', capacidade: 50, responsaveis: [], politica: 'todos', autorizados: [], indisp: [] },
             { id: 's103', nome: 'Sala 103', tipo: 'sala', capacidade: 40, responsaveis: [], politica: 'todos', autorizados: [], indisp: T('noite', seg2sex) },
             { id: 's201', nome: 'Sala 201', tipo: 'sala', capacidade: 60, responsaveis: [], politica: 'todos', autorizados: [], indisp: [] },
-            { id: 'lia', nome: 'Lab. de Instrumentação Agrícola (401)', tipo: 'laboratorio', capacidade: 20, responsaveis: ['marlon'], politica: 'autorizados', autorizados: ['diego'], indisp: T('tarde', [4]) },
+            { id: 'lia', nome: 'Lab. de Instrumentação Agrícola (401)', tipo: 'laboratorio', capacidade: 20, responsaveis: ['marlon'], politica: 'autorizados', autorizados: ['diego'], indisp: [], pesquisa: T('tarde', [4]) }, // sexta à tarde: pesquisa
             { id: 'lpc', nome: 'Lab. de Pós-Colheita (400)', tipo: 'laboratorio', capacidade: 20, responsaveis: ['bruno'], politica: 'responsaveis', autorizados: [], indisp: [] },
             { id: 'linfo', nome: 'Lab. de Informática', tipo: 'laboratorio', capacidade: 30, responsaveis: ['carla', 'fabio'], politica: 'todos', autorizados: [], indisp: [] }
         ];

@@ -70,12 +70,13 @@ teste('Conflitos: horários proibidos, horário fixo, curso e laboratório não 
     d.grade.alocacoes = [
         { disc: 'calc1', d: 0, h: 0, sala: 's101' }, // Ana não pode segunda de manhã
         { disc: 'emb1', d: 0, h: 5, sala: 'lia' }, // fora do horário fixo
-        { disc: 'instr', d: 4, h: 6, sala: 'lia' }, // laboratório indisponível sexta à tarde
+        { disc: 'instr', d: 4, h: 6, sala: 'lia' }, // laboratório reservado para pesquisa sexta à tarde
+        { disc: 'circ', d: 1, h: 12, sala: 's103' }, // Sala 103 indisponível à noite
         { disc: 'calc2', d: 1, h: 11, sala: 's102' }, // oferta à noite: fora do funcionamento
         { disc: 'estr', d: 2, h: 0, sala: 'lpc' } // Fábio no Lab. de Pós-Colheita (só responsáveis)
     ];
     const t = tipos(d);
-    ['prof-indisp', 'fixo', 'sala-indisp', 'curso', 'lab-permissao'].forEach((x) => ok(t.includes(x), `faltou ${x}`));
+    ['prof-indisp', 'fixo', 'pesquisa-sala', 'sala-indisp', 'curso', 'lab-permissao'].forEach((x) => ok(t.includes(x), `faltou ${x}`));
 });
 
 teste('Conflitos: autorizado pelo responsável não gera conflito de laboratório', () => {
@@ -311,6 +312,81 @@ teste('MEGA (simulado): salvar versões, listar e trazer os outros cursos do per
     igual(outros.map((x) => N.normalizar(x.dados).cursos[0].nome).sort(), ['Engenharia Civil', 'Engenharia de Controle e Automação']);
     ok(lista[0].versoes[0].name.startsWith(lista[0].curso));
     Nuvem.estado.simulado = null;
+});
+
+teste('Calendário: ler o texto colado da página (datas e tipos) em formatos diferentes', () => {
+    const texto = `Calendário Acadêmico 2027
+01/01/2027 – sexta-feira Feriado: Confraternização Universal
+10/02/2027 quarta-feira Quarta-Feira de Cinzas (ponto facultativo até as 14 horas)
+12/02/2027 Prazo para as Unidades solicitarem salas à SACE
+08/03 segunda-feira Início do semestre letivo 2027/1 - Todos os cursos de Graduação e de Pós-Graduação
+26/03/2027 Sexta-Feira Santa
+21/04/2027 | Tiradentes
+28/05/2027 - Recesso administrativo e acadêmico
+10/07/2027 sábado Último dia letivo de 2027/1.
+02/08/2027 Início do semestre 2027/2 - Todos os cursos
+04/12/2027 Último dia letivo de 2027/2.`;
+    const c = N.lerCalendarioTexto(texto, 2027, 'https://exemplo');
+    igual(c.ano, 2027);
+    igual(c.semestres, { 1: { inicio: '2027-03-08', fim: '2027-07-10' }, 2: { inicio: '2027-08-02', fim: '2027-12-04' } });
+    igual(c.eventos.map((e) => [e.data, e.tipo]), [['2027-01-01', 'feriado'], ['2027-02-10', 'ponto'], ['2027-03-26', 'feriado'], ['2027-04-21', 'feriado'], ['2027-05-28', 'recesso']]);
+    igual(c.eventos[1].ateHora, '14:00');
+});
+
+teste('Calendário 2027/1: dias letivos por dia da semana e disciplinas mais prejudicadas', () => {
+    const d = exemploUm();
+    igual(d.config.calendario.url, N.CALENDARIO_URL_2027);
+    d.config.ano = 2027; d.config.metade = 1;
+    d.grade.alocacoes = [{ disc: 'instal', d: 4, h: 0, sala: 's101' }, { disc: 'instal', d: 4, h: 1, sala: 's101' }, { disc: 'calc1', d: 0, h: 0, sala: 's102' }];
+    const a = N.analisarCalendario(d);
+    igual([a.inicio, a.fim], ['2027-03-08', '2027-07-10']);
+    igual(a.porDia.map((x) => [x.dia, x.total, x.perdidos]), [['Segunda', 18, 0], ['Terça', 18, 0], ['Quarta', 18, 1], ['Quinta', 18, 1], ['Sexta', 18, 2]]);
+    igual(a.disciplinas[0].codigo, 'EAG081', 'a da sexta é a mais prejudicada');
+    igual([a.disciplinas[0].previstas, a.disciplinas[0].perdidas, a.disciplinas[0].datas], [36, 4, ['26/03/2027', '28/05/2027']]);
+    igual(a.disciplinas[1].perdidas, 0, 'segunda não perde nada em 2027/1');
+    d.config.metade = 2;
+    const b = N.analisarCalendario(d);
+    igual(b.porDia.find((x) => x.dia === 'Segunda').perdidos, 2, '2027/2: 20/09 e 15/11 são segundas');
+    ok(b.disciplinas.find((x) => x.codigo === 'MAT001').perdidas === 2);
+});
+
+teste('Calendário: ponto facultativo até as 14h só tira as aulas da manhã', () => {
+    const d = exemploUm();
+    d.config.ano = 2027; d.config.metade = 1;
+    d.config.calendario.eventos.push({ data: '2027-03-10', tipo: 'ponto', descricao: 'teste', ateHora: '14:00' });
+    d.grade.alocacoes = [{ disc: 'calc1', d: 2, h: 0, sala: 's101' }, { disc: 'calc2', d: 2, h: 7, sala: 's101' }];
+    const a = N.analisarCalendario(d);
+    igual(a.disciplinas.find((x) => x.codigo === 'MAT001').datas.includes('10/03/2027'), true);
+    igual(a.disciplinas.find((x) => x.codigo === 'MAT002').datas.includes('10/03/2027'), false);
+});
+
+teste('Pesquisa: o gerador não põe aula em horário reservado para pesquisa (sala e professor)', () => {
+    for (let s = 1; s <= 10; s++) {
+        const d = exemploUm();
+        d.professores.find((p) => p.id === 'marlon').pesquisa = N.chavesTurno(d.config, 'manha', [1]);
+        const r = N.gerar(d, { semente: s });
+        const lia = d.salas.find((x) => x.id === 'lia');
+        r.alocacoes.forEach((a) => {
+            const k = `${a.d}|${a.h}`;
+            ok(!(a.sala === 'lia' && lia.pesquisa.includes(k)), 'aula no horário de pesquisa do laboratório');
+            ok(!(d.disciplinas.find((q) => q.id === a.disc).professor === 'marlon' && a.d === 1 && a.h < 5), 'aula no horário de pesquisa do professor');
+        });
+    }
+});
+
+teste('Relatórios internos: carga dos professores (com outros cursos) e uso das salas (ensino, pesquisa, livre)', () => {
+    const d = exemploUm();
+    const r0 = N.gerar(d, { semente: 6 }); d.grade.alocacoes = r0.alocacoes;
+    const r = N.relatorios(d);
+    const total = d.disciplinas.reduce((t, q) => t + q.aulas, 0); // nesta grade (só Eng. Agrícola) não há par de equivalentes
+    igual(r.professores.reduce((t, p) => t + p.aulas, 0), total);
+    const marlon = r.professores.find((p) => p.nome === 'Marlon Soares Sigales');
+    igual(marlon.aulas, 15); igual(marlon.horas, 12.5);
+    ok(r.professores.find((p) => p.nome.startsWith('Ana')).outrosCursosHoras > 0, 'Ana tem aula nos outros cursos');
+    const lia = r.salas.find((s) => s.nome.startsWith('Lab. de Instrumentação'));
+    igual(lia.pesquisaHoras, Math.round(6 * 50 / 60 * 10) / 10);
+    ok(Math.abs(lia.pctEnsino + lia.pctPesquisa + lia.pctLivre + (lia.indispHoras ? 100 * lia.indispHoras / r.horasSemana : 0) - 100) < 0.5, 'soma 100%');
+    for (let i = 1; i < r.salas.length; i++) ok(r.salas[i - 1].pctEnsino >= r.salas[i].pctEnsino, 'ordem: mais usadas primeiro');
 });
 
 teste('Arquivo: normalizar completa campos faltando', () => {

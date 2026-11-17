@@ -48,7 +48,7 @@ const GeradorPDF = (() => {
         }
 
         /** Grade de uma visão: filtro das aulas e texto de cada aula. */
-        function grade(filtro, linha2, fechada, sitFixa) {
+        function grade(filtro, linha2, fechada, sitFixa, pesquisa) {
             const porCel = {};
             alocs.forEach((a, i) => { if (filtro(a)) (porCel[`${a.d}|${a.h}`] = porCel[`${a.d}|${a.h}`] || []).push(i); });
             const marcas = {};
@@ -63,6 +63,7 @@ const GeradorPDF = (() => {
                     else if (!marcas[k] && discs.every((q) => q.ofertas.length && q.ofertas.every((o) => N.situacao(o.semestre, cfg.metade) === 'reoferta'))) marcas[k] = marcas[k] || 'reoferta';
                     return `${temC ? '(!) ' : ''}${discs.map((q) => q.codigo || '').filter(Boolean).join('/')} ${discs[0].nome}\n${linha2(alocs[ids[0]], discs[0], discs)}`;
                 });
+                if (!partes.length && pesquisa && pesquisa(k)) { marcas[k] = 'pesquisa'; return 'Pesquisa'; }
                 if (!partes.length && fechada && fechada(k)) marcas[k] = 'fechado';
                 return txt(partes.join('\n'));
             })]);
@@ -82,6 +83,7 @@ const GeradorPDF = (() => {
                     const m = marcas[k];
                     if (m === 'erro') { h.cell.styles.fillColor = VERMELHO_CLARO; h.cell.styles.textColor = [120, 20, 15]; }
                     else if (m === 'fechado') h.cell.styles.fillColor = [238, 242, 241];
+                    else if (m === 'pesquisa') { h.cell.styles.fillColor = [241, 234, 252]; h.cell.styles.textColor = [91, 63, 160]; h.cell.styles.halign = 'center'; }
                     else if (h.cell.raw) h.cell.styles.fillColor = (sitFixa || m) === 'reoferta' ? AMARELO_CLARO : VERDE_CLARO;
                     if (h.row.index > 0 && N.turno(cfg.horarios[h.row.index]) !== N.turno(cfg.horarios[h.row.index - 1])) h.cell.styles.lineWidth = { top: 0.8, bottom: 0.15, left: 0.15, right: 0.15 };
                 }
@@ -157,17 +159,17 @@ const GeradorPDF = (() => {
             if (!alocs.some((a) => discs.some((q) => q.id === a.disc)) && !op.vazios) return;
             novaPagina();
             cabecalho(`Professor(a): ${p.nome}`, `${cfg.titulo} — ${periodo}`);
-            grade((a) => discs.some((q) => q.id === a.disc), (a, q, ds) => `${N.nomeDe(D.salas, a.sala)} · ${turmas(ds)}`, (k) => (p.indisp || []).includes(k));
+            grade((a) => discs.some((q) => q.id === a.disc), (a, q, ds) => `${N.nomeDe(D.salas, a.sala)} · ${turmas(ds)}`, (k) => (p.indisp || []).includes(k), null, (k) => (p.pesquisa || []).includes(k));
             const resp = D.salas.filter((s) => s.responsaveis.includes(p.id)).map((s) => s.nome);
             legenda(`Disciplinas: ${discs.map((q) => `${q.codigo ? q.codigo + ' ' : ''}${q.nome}`).join(' · ') || '—'}.${resp.length ? ` Responsável por: ${resp.join(', ')}.` : ''}  Células cinza: horários em que não pode dar aula; amarelo: reoferta.`);
         });
 
         // ---------------- salas
         if (op.sala !== false) D.salas.forEach((s) => {
-            if (!alocs.some((a) => a.sala === s.id) && !op.vazios) return;
+            if (!alocs.some((a) => a.sala === s.id) && !(s.pesquisa || []).length && !op.vazios) return;
             novaPagina();
             cabecalho(`${s.tipo === 'laboratorio' ? 'Laboratório' : 'Sala'}: ${s.nome}`, `${cfg.titulo} — ${periodo}`);
-            grade((a) => a.sala === s.id, (a, q, ds) => `${primeiroNome(q.professor)} · ${turmas(ds)}`, (k) => (s.indisp || []).includes(k));
+            grade((a) => a.sala === s.id, (a, q, ds) => `${primeiroNome(q.professor)} · ${turmas(ds)}`, (k) => (s.indisp || []).includes(k), null, (k) => (s.pesquisa || []).includes(k));
             legenda(`${s.responsaveis.length ? `Responsáveis: ${s.responsaveis.map(nomeP).join(', ')}. ` : ''}${N.POLITICA[s.politica]}.  Células cinza: horários em que não pode ser usada; amarelo: reoferta.`);
         });
 
@@ -240,6 +242,50 @@ const GeradorPDF = (() => {
             });
         }
 
+        // ---------------- calendário acadêmico (fim do documento)
+        const an = op.calendario !== false ? N.analisarCalendario(D) : null;
+        if (an) {
+            novaPagina();
+            cabecalho(`Calendário acadêmico ${an.ano} — semestre ${cfg.ano}/${cfg.metade}`, `${cfg.titulo} — ${periodo}`);
+            doc.setFontSize(8.5);
+            const totLet = an.porDia.reduce((t, x) => t + x.letivos + x.parciais, 0), totPerd = an.porDia.reduce((t, x) => t + x.perdidos, 0);
+            doc.text(doc.splitTextToSize(txt(`Período letivo: ${N.dataBR(an.inicio)} a ${N.dataBR(an.fim)} (${an.semanas} semanas). Dias de aula da grade (${cfg.dias.join(', ')}): ${totLet} letivos e ${totPerd} sem aula por feriado ou recesso. Fonte: calendário acadêmico vigente da UFPel (CRA), ${an.url}.`), W - 20), 10, 27);
+            doc.autoTable({
+                startY: 35, margin: { left: 10, right: 10, bottom: 12 },
+                head: [['Data', 'Dia', 'Tipo', 'Descrição', 'Efeito na grade']],
+                body: an.eventos.map((e) => [N.dataBR(e.data), e.diaSemana, N.NOME_TIPO_CAL[e.tipo] || e.tipo, e.descricao + (e.ateHora ? ` (até ${e.ateHora})` : ''),
+                    e.foraDoPeriodo ? 'fora do período letivo' : (e.temAula ? (e.suspende ? (e.ateHora ? `sem aula até ${e.ateHora}` : 'sem aula') : 'há aula (confirmar com a CRA)') : 'dia sem aula na grade')].map(txt)),
+                theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 7.5, cellPadding: 1 },
+                columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 18 }, 2: { cellWidth: 34 }, 4: { cellWidth: 48 } },
+                didParseCell: (h) => { if (h.section === 'body' && /sem aula/.test(h.row.raw[4]) && !/dia sem aula/.test(h.row.raw[4])) h.cell.styles.fillColor = VERMELHO_CLARO; if (h.section === 'body' && /fora do/.test(h.row.raw[4])) h.cell.styles.textColor = CINZA; }
+            });
+            doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 5, margin: { left: 10, right: 10, bottom: 12 },
+                head: [['Dia da semana', 'Dias no período', 'Sem aula (feriado/recesso)', 'Parciais', 'Dias letivos', 'Datas sem aula']],
+                body: an.porDia.map((x) => [x.dia, x.total, x.perdidos, x.parciais, x.letivos + x.parciais, x.datasPerdidas.map(N.dataBR).join(', ') || '—'].map(txt)),
+                theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 8, cellPadding: 1.1 },
+                columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' } }
+            });
+            novaPagina();
+            cabecalho('Disciplinas mais prejudicadas pelo calendário', `${cfg.titulo} — ${periodo}`);
+            doc.setFontSize(8);
+            doc.text(doc.splitTextToSize(txt('Ordem: mais aulas perdidas primeiro. Aulas = períodos de 50 min. "Carga exigida" vem da matriz (horas) ou de créditos × 15; saldo negativo = a grade não cobre a carga no semestre.'), W - 20), 10, 27);
+            doc.autoTable({
+                startY: 32, margin: { left: 10, right: 10, bottom: 12 },
+                head: [['Código', 'Disciplina', 'Professor', 'Dias', 'Aulas/sem.', 'Previstas', 'Perdidas', '% perdido', 'Dadas', 'Carga exigida', 'Saldo', 'Datas perdidas']],
+                body: an.disciplinas.length ? an.disciplinas.map((x) => [x.codigo, x.nome, x.professor || '—', x.dias, x.aulasSemana, x.previstas, x.perdidas, `${String(x.pct).replace('.', ',')}%`, x.dadas, x.exigidas || '—', x.exigidas ? x.saldo : '—', x.datas.join(', ') || '—'].map(txt))
+                    : [['—', 'A grade está vazia.', '', '', '', '', '', '', '', '', '', '']],
+                theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 7.5 }, styles: { fontSize: 7, cellPadding: 0.9 },
+                columnStyles: { 0: { cellWidth: 16 }, 1: { cellWidth: 52 }, 2: { cellWidth: 30 }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' }, 8: { halign: 'center' }, 9: { halign: 'center' }, 10: { halign: 'center' } },
+                didParseCell: (h) => {
+                    if (h.section !== 'body' || !an.disciplinas[h.row.index]) return;
+                    const x = an.disciplinas[h.row.index];
+                    if (x.exigidas && x.saldo < 0) h.cell.styles.fillColor = VERMELHO_CLARO;
+                    else if (h.row.index < 5 && x.perdidas > 0) h.cell.styles.fillColor = AMARELO_CLARO;
+                }
+            });
+        }
+
         if (!paginas) { novaPagina(); cabecalho(cfg.titulo); doc.text('Nada selecionado para o PDF.', 10, 35); }
 
         // rodapé com número de páginas
@@ -254,7 +300,43 @@ const GeradorPDF = (() => {
         return doc;
     }
 
-    return { gerar, txt };
+    /** PDF dos relatórios internos (administrador): carga dos professores, uso das salas e horários de pesquisa. */
+    function relatorios(D, op = {}) {
+        const N = typeof Nucleo !== 'undefined' ? Nucleo : require('./nucleo.js');
+        const JsPDF = (typeof window !== 'undefined' && window.jspdf) ? window.jspdf.jsPDF : op.jsPDF;
+        const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+        const cfg = D.config, r = N.relatorios(D);
+        const topo = (titulo) => {
+            let x = 10;
+            ['ufpel', 'ceng', 'ea', 'lia'].forEach((k) => { const l = typeof LOGOS_PDF !== 'undefined' && LOGOS_PDF[k]; if (!l) return; const w = 12 * l.w / l.h; try { doc.addImage(l.src, 'PNG', x, 7, w, 12); } catch (e) { /* ok */ } x += w + 3; });
+            doc.setTextColor(...VERDE); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(txt(titulo), W - 10, 12, { align: 'right' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...CINZA);
+            doc.text(txt(`Relatório interno (uso administrativo) — ${(D.cursos[0] || {}).nome || ''} — ${cfg.ano}/${cfg.metade}`), W - 10, 17.5, { align: 'right' });
+            doc.setDrawColor(168, 225, 86); doc.setLineWidth(0.8); doc.line(10, 21.5, W - 10, 21.5); doc.setTextColor(0, 0, 0);
+        };
+        topo('Carga horária dos professores');
+        doc.autoTable({ startY: 25, margin: { left: 10, right: 10, bottom: 12 },
+            head: [['#', 'Professor', 'Aulas aqui', 'Horas aqui', 'Horas outros cursos', 'Total h/sem.', 'Pesquisa h/sem.', 'Disciplinas', 'Dias / turnos', 'Responsável por']],
+            body: r.professores.map((p, i) => [i + 1, p.nome, p.aulas, p.horas, p.outrosCursosHoras || '—', p.total, p.pesquisaHoras || '—', p.disciplinas.join(', ') || '—', `${p.dias.join(', ')}${p.turnos.length ? ' · ' + p.turnos.join('/') : ''}`, p.responsavelPor.join(', ') || '—'].map(txt)),
+            theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 7.5, cellPadding: 1 },
+            didParseCell: (h) => { if (h.section === 'body' && h.row.index < 3) h.cell.styles.fillColor = AMARELO_CLARO; } });
+        doc.addPage(); topo('Uso das salas e laboratórios');
+        doc.autoTable({ startY: 25, margin: { left: 10, right: 10, bottom: 12 },
+            head: [['#', 'Sala ou laboratório', 'Tipo', 'Ensino aqui (h)', 'Ensino outros cursos (h)', 'Uso p/ ensino', 'Pesquisa (h)', 'Pesquisa', 'Indisponível (h)', 'Livre (h)', 'Responsáveis']],
+            body: r.salas.map((s, i) => [i + 1, s.nome, s.tipo === 'laboratorio' ? 'Laboratório' : 'Sala', s.ensinoHoras, s.outrosCursosHoras || '—', `${String(s.pctEnsino).replace('.', ',')}%`, s.pesquisaHoras || '—', `${String(s.pctPesquisa).replace('.', ',')}%`, s.indispHoras || '—', s.livreHoras, s.responsaveis.join(', ') || '—'].map(txt)),
+            theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 7.5, cellPadding: 1 } });
+        const pesq = [...D.salas.map((s) => [s.nome, 'Sala/lab.', s.pesquisa || []]), ...D.professores.map((p) => [p.nome, 'Professor', p.pesquisa || []])].filter((x) => x[2].length);
+        doc.autoTable({ startY: doc.lastAutoTable.finalY + 6, margin: { left: 10, right: 10, bottom: 12 },
+            head: [['Reservado para pesquisa', '', 'Horários (código: dia + turno + período)']],
+            body: pesq.length ? pesq.map(([n, t, l]) => [n, t, l.map((k) => { const [d, h] = N.separa(k); return cfg.horarios[h] && d < cfg.dias.length ? N.codigoHorario(cfg, d, h) : null; }).filter(Boolean).sort().join(' ')].map(txt)) : [['—', '', 'Nenhum horário reservado para pesquisa.']],
+            theme: 'grid', headStyles: { fillColor: [91, 63, 160], fontSize: 8 }, styles: { fontSize: 8 }, columnStyles: { 2: { font: 'courier' } } });
+        const total = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= total; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(...CINZA); doc.text(txt(`Gerador de Horários — relatório interno — gerado em ${new Date().toLocaleDateString('pt-BR')}`), 10, H - 5); doc.text(`Página ${i} de ${total}`, W - 10, H - 5, { align: 'right' }); }
+        return doc;
+    }
+
+    return { gerar, relatorios, txt };
 })();
 
 if (typeof module !== 'undefined') module.exports = GeradorPDF;

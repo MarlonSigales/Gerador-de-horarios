@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261117b">
+    <link rel="stylesheet" href="css/style.css?v=20261117d">
 </head>
 <body>
     <header class="topbar">
@@ -99,9 +99,33 @@
                             </fieldset>
                             <div class="barra"><button type="button" class="btn btn-primary" data-acao="salvar-config">Salvar configuração</button><small class="muted">Mudar dias ou horários mantém o que já foi marcado nos horários que continuam existindo.</small></div>
                         </div>
+                        <div class="card" id="card-calendario">
+                            <div class="card-topo"><h2>Calendário acadêmico vigente</h2><small id="cal-resumo"></small></div>
+                            <p class="muted">Feriados, recessos e pontos facultativos vêm sempre do link do calendário acadêmico vigente da UFPel (CRA). Eles entram no fim do PDF,
+                                com os dias letivos e as disciplinas mais prejudicadas pela grade.</p>
+                            <div class="campos"><label class="campo" style="grid-column: 1 / -1"><span>Link do calendário acadêmico vigente</span><input type="text" id="cal-url" spellcheck="false"></label></div>
+                            <div class="barra">
+                                <button type="button" class="btn btn-primary btn-sm" data-acao="cal-buscar">🔎 Buscar no link</button>
+                                <a class="btn btn-secondary btn-sm" id="cal-abrir" href="#" target="_blank" rel="noopener">↗ Abrir o link</a>
+                                <button type="button" class="btn btn-secondary btn-sm" data-acao="cal-2027">Usar o de 2027 já embutido</button>
+                            </div>
+                            <details id="cal-colar"><summary style="cursor:pointer;font-weight:600;color:var(--teal)">Se o navegador não deixar ler o link: copie a página e cole aqui</summary>
+                                <p class="muted">Abra o link, selecione tudo (Ctrl+A), copie (Ctrl+C) e cole abaixo (Ctrl+V). O app acha as datas e classifica cada uma.</p>
+                                <textarea id="cal-texto" rows="6" placeholder="Cole aqui o texto da página do calendário acadêmico"></textarea>
+                                <div class="barra" style="margin-top:.4rem"><button type="button" class="btn btn-primary btn-sm" data-acao="cal-ler-texto">Ler o texto colado</button></div>
+                            </details>
+                            <div class="campos" style="margin-top:.6rem">
+                                <label class="campo"><span>1º semestre do ano: início</span><input type="text" id="cal-s1-ini" placeholder="AAAA-MM-DD"></label>
+                                <label class="campo"><span>1º semestre do ano: último dia letivo</span><input type="text" id="cal-s1-fim" placeholder="AAAA-MM-DD"></label>
+                                <label class="campo"><span>2º semestre do ano: início</span><input type="text" id="cal-s2-ini" placeholder="AAAA-MM-DD"></label>
+                                <label class="campo"><span>2º semestre do ano: último dia letivo</span><input type="text" id="cal-s2-fim" placeholder="AAAA-MM-DD"></label>
+                            </div>
+                            <div class="barra"><button type="button" class="btn btn-secondary btn-sm" data-acao="cal-salvar-datas">Salvar datas do semestre</button></div>
+                            <div class="tabela-wrap" id="cal-eventos"></div>
+                        </div>
                     </section>
 
-                    <section class="pagina" id="p-cursos" data-titulo="Curso" hidden>
+                                    <section class="pagina" id="p-cursos" data-titulo="Curso" hidden>
                         <div class="card">
                             <div class="card-topo"><h2>Curso desta grade</h2></div>
                             <p class="muted">Cada grade é de um único curso. Os outros cursos fazem as grades deles e salvam no MEGA (ou exportam o JSON):
@@ -186,6 +210,10 @@
                         </div>
                     </section>
 
+                    <section class="pagina" id="p-relatorios" data-titulo="Relatórios internos" hidden>
+                        <div id="relatorios-conteudo"></div>
+                    </section>
+
                     <section class="pagina" id="p-pdf" data-titulo="PDF" hidden>
                         <div class="card">
                             <h2>Gerar PDF</h2>
@@ -199,6 +227,7 @@
                                     <label><input type="checkbox" id="pdf-relacao" checked> Relação de disciplinas e professores por curso e semestre, com os códigos de horário (ex.: 621 622 623 624), sem grade</label>
                                     <label><input type="checkbox" id="pdf-disciplinas" checked> Lista das disciplinas (professor responsável, cursos, salas)</label>
                                     <label><input type="checkbox" id="pdf-conflitos" checked> Conflitos e aulas sem lugar</label>
+                                    <label><input type="checkbox" id="pdf-calendario" checked> No fim: calendário acadêmico vigente — feriados, dias letivos e disciplinas mais prejudicadas</label>
                                     <label><input type="checkbox" id="pdf-vazios"> Incluir semestres, professores e salas sem aula</label>
                                 </div>
                             </fieldset>
@@ -229,14 +258,14 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261117b"></script>
-    <script src="js/matrizes.js?v=20261117b"></script>
-    <script src="js/exemplo.js?v=20261117b"></script>
-    <script src="js/nuvem.js?v=20261117b"></script>
-    <script src="js/logos.js?v=20261117b"></script>
+    <script src="js/nucleo.js?v=20261117d"></script>
+    <script src="js/matrizes.js?v=20261117d"></script>
+    <script src="js/exemplo.js?v=20261117d"></script>
+    <script src="js/nuvem.js?v=20261117d"></script>
+    <script src="js/logos.js?v=20261117d"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
-    <script src="js/pdf.js?v=20261117b"></script>
-    <script src="js/app.js?v=20261117b"></script>
+    <script src="js/pdf.js?v=20261117d"></script>
+    <script src="js/app.js?v=20261117d"></script>
 </body>
 </html>

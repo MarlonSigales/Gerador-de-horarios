@@ -68,10 +68,24 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 29 [resolvido 17/11/2026] Turno preferido por semestre no curso (ex.: 1 e 3 manhã, 5 e 7 tarde): preferência no gerador e
    aviso na edição quando fica fora.
 
+33 [resolvido 17/11/2026] Calendário acadêmico vigente (link guardado na Configuração; sempre buscar no link fornecido):
+   "Buscar no link" (se o navegador bloquear a leitura do site da UFPel, abre o campo para colar o texto da página, que é
+   lido e classificado: feriado, recesso, ponto facultativo — com "até as 14 horas" —, início e último dia letivo de cada
+   semestre). Calendário 2027 embutido (extraído do link da CRA em 17/11/2026). No FIM do PDF: lista de feriados/recessos/
+   pontos e eventos com o efeito na grade, dias letivos por dia da semana e disciplinas mais prejudicadas (aulas perdidas,
+   % perdido, aulas dadas × carga exigida da matriz).
+34 [resolvido 17/11/2026] Horários reservados para pesquisa (salas/laboratórios e professores): não recebem aula (gerador e
+   conflito), aparecem na grade da sala/professor (hachurado lilás) e no PDF.
+35 [resolvido 17/11/2026] Relatórios internos (só administrador, login admin/admin): carga horária dos professores (aqui +
+   outros cursos da mesma unidade, turma conjunta conta uma vez), quem trabalha mais, uso das salas e laboratórios para
+   ensino (com outros cursos), pesquisa, indisponível e livre, ranking dos mais usados, quando é reservado para pesquisa;
+   PDF dos relatórios. Obs.: o login é só na interface (o app roda no navegador); não protege o arquivo JSON.
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
    passa de um turno para outro (18:50 → 19:00 quebra o bloco).
+36 [futuro] Trocar a senha do administrador (hoje fixa admin/admin, como pedido).
 30 [fazer] Testar o MEGA com a conta real do grupo (daqui só deu para testar com um MEGA simulado e a janela de entrada).
 31 [fazer] Catálogo só tem o Centro de Engenharias (unidade 444); para as outras unidades, informar as páginas institucionais.
 32 [futuro] Professores e salas comuns entre cursos: um cadastro compartilhado no MEGA evitaria nomes diferentes.
@@ -82,7 +96,10 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 30 de 30 passaram (inclui MEGA simulado, unidade, turno preferido, matriz e exportação).
+- node tests/testes.js: 35 de 35 passaram (inclui MEGA simulado, unidade, turno preferido, matriz, exportação, calendário,
+  pesquisa e relatórios).
+- Playwright 360 e 1366 px: calendário (buscar → colar texto → ler; 2027 embutido), login adm (senha errada recusada),
+  relatórios e PDFs (grade com calendário no fim; relatórios), sem estouro e sem erro de JS.
 - Playwright 360 e 1366 px: curso pelo catálogo + matriz, turno preferido, exportar (1 curso, sem outros), importar como
   outro curso e como grade, aleatorizar com bloqueios (0 conflitos), janela do MEGA e megajs local carregando; sem estouro e sem erro de JS. (inclui gerar o PDF no Node, os horários do CEng e os códigos UFPel).
 - Playwright 360 e 1366 px: aba Relação, Configuração e PDF sem estouro e sem erro de JavaScript.

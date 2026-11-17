@@ -238,3 +238,10 @@ td.codigos { font-family: ui-monospace, Consolas, monospace; font-size: .86rem; 
 table.relacao tr.grupo td { background: var(--verde-claro); color: var(--teal); border-top: 2px solid var(--borda); }
 .campo[hidden], [hidden] { display: none !important; }
 table.relacao td.codigos { white-space: normal; min-width: 150px; }
+
+table.seletor.seletor-roxo { --marca: #9b7bd8; }
+table.grade td.pesquisa { background: repeating-linear-gradient(45deg, #f6f1fd, #f6f1fd 6px, #ece2fb 6px, #ece2fb 12px); }
+.rotulo-pesq { color: #7a5bc0; font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+.etiqueta.pesq { color: #5b3fa0; background: #f1eafc; border-color: #d8c8f4; }
+.barra-uso { display: flex; height: 10px; background: #e3ecea; border-radius: 5px; overflow: hidden; min-width: 90px; }
+.barra-uso i { display: block; height: 100%; }
