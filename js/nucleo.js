@@ -57,8 +57,8 @@ const Nucleo = (() => {
     }
 
     const minutos = (hhmm) => { const [h, m] = String(hhmm || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
-    /** Turno pelo início da aula: manhã antes das 12h, tarde antes das 18h, noite depois. */
-    function turno(horario) { const m = minutos(horario.ini); return m < 720 ? 'manha' : (m < 1080 ? 'tarde' : 'noite'); }
+    /** Turno pelo início da aula: manhã antes das 12h, tarde antes das 18h30, noite depois. */
+    function turno(horario) { const m = minutos(horario.ini); return m < 720 ? 'manha' : (m < 1110 ? 'tarde' : 'noite'); }
     const NOME_TURNO = { manha: 'Manhã', tarde: 'Tarde', noite: 'Noite' };
 
     /** Situação da disciplina no curso: na metade 1 os semestres ímpares são oferta; na metade 2, os pares. */
@@ -73,10 +73,10 @@ const Nucleo = (() => {
         for (let d = 0; d < cfg.dias.length; d++) for (let h = 0; h < cfg.horarios.length; h++) r.push(chave(d, h));
         return r;
     }
-    /** As aulas h e h+1 são seguidas (intervalo de até 20 min)? */
+    /** As aulas h e h+1 são seguidas (mesmo turno e intervalo de até 20 min)? Um bloco não passa de um turno para outro. */
     function seguidas(cfg, h) {
         const a = cfg.horarios[h], b = cfg.horarios[h + 1];
-        return !!(a && b) && minutos(b.ini) - minutos(a.fim) <= 20 && minutos(b.ini) >= minutos(a.fim) - 1;
+        return !!(a && b) && turno(a) === turno(b) && minutos(b.ini) - minutos(a.fim) <= 20 && minutos(b.ini) >= minutos(a.fim) - 1;
     }
 
     /** Índices auxiliares por id. */
@@ -513,11 +513,11 @@ const Nucleo = (() => {
     /**
      * Horários do CEng/UFPel, períodos de 50 min:
      * manhã 8h–12h30 (intervalo 9h40–10h); tarde 13h30–18h30 (intervalo 16h–16h20); noite 19h–22h30 (intervalo 20h40–20h50).
-     * Na tarde cabem 5 períodos (3 antes e 2 depois do intervalo), até 18h; 18h–18h30 fica sem aula.
+     * Tarde com 6 períodos: 3 antes e 3 depois do intervalo, o último das 18h às 18h50.
      */
     function horariosPadrao() {
         return [['08:00', '08:50'], ['08:50', '09:40'], ['10:00', '10:50'], ['10:50', '11:40'], ['11:40', '12:30'],
-            ['13:30', '14:20'], ['14:20', '15:10'], ['15:10', '16:00'], ['16:20', '17:10'], ['17:10', '18:00'],
+            ['13:30', '14:20'], ['14:20', '15:10'], ['15:10', '16:00'], ['16:20', '17:10'], ['17:10', '18:00'], ['18:00', '18:50'],
             ['19:00', '19:50'], ['19:50', '20:40'], ['20:50', '21:40'], ['21:40', '22:30']].map(([ini, fim]) => ({ ini, fim }));
     }
 

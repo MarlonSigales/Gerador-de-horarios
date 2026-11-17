@@ -108,7 +108,7 @@ teste('Edição: mover bloco mostra os conflitos do destino e não cabe se passa
     let achouConflito = false, achouLivre = false;
     for (let dd = 0; dd < d.config.dias.length; dd++) for (let h = 0; h < d.config.horarios.length; h++) {
         const r = N.avaliarMovimento(d, bloco, dd, h);
-        if (h === 4 || h === 9) ok(!r.valido, 'bloco de 2 não passa do fim da manhã nem do fim da tarde');
+        if (h === 4 || h === 10) ok(!r.valido, 'bloco de 2 não passa do fim da manhã nem do fim da tarde');
         if (r.valido && r.erros) achouConflito = true;
         if (r.valido && !r.conflitos.length) achouLivre = true;
     }
@@ -154,17 +154,19 @@ teste('Excluir professor tira ele das disciplinas e dos laboratórios', () => {
     ok(d.disciplinas.filter((q) => q.professor === 'marlon').length === 0);
 });
 
-teste('Horários do CEng/UFPel: 14 períodos de 50 min e intervalos certos', () => {
+teste('Horários do CEng/UFPel: 15 períodos de 50 min (tarde com 6) e intervalos certos', () => {
     const h = N.horariosPadrao(), cfg = { horarios: h };
-    igual(h.length, 14);
+    igual(h.length, 15);
     const min = (x) => { const [a, b] = x.split(':').map(Number); return a * 60 + b; };
     h.forEach((x) => igual(min(x.fim) - min(x.ini), 50, x.ini));
     ok(N.seguidas(cfg, 1), 'intervalo 9h40–10h não quebra o bloco');
-    ok(N.seguidas(cfg, 11), 'intervalo 20h40–20h50 não quebra o bloco');
+    ok(N.seguidas(cfg, 12), 'intervalo 20h40–20h50 não quebra o bloco');
     ok(N.seguidas(cfg, 7), 'intervalo 16h–16h20 não quebra o bloco');
-    ok(!N.seguidas(cfg, 9), 'fim da tarde (18h) até a noite (19h) quebra o bloco');
+    ok(N.seguidas(cfg, 9), '17h10–18h e 18h–18h50 são seguidas');
+    ok(!N.seguidas(cfg, 10), 'da tarde (18h50) para a noite (19h) o bloco quebra');
+    igual(N.turno(h[10]), 'tarde');
     igual([h[7].fim, h[8].ini], ['16:00', '16:20']);
-    igual([h[0].ini, h[4].fim, h[5].ini, h[9].fim, h[10].ini, h[13].fim], ['08:00', '12:30', '13:30', '18:00', '19:00', '22:30']);
+    igual([h[0].ini, h[4].fim, h[5].ini, h[10].fim, h[11].ini, h[14].fim], ['08:00', '12:30', '13:30', '18:50', '19:00', '22:30']);
 });
 
 teste('Códigos de horário UFPel: 611, 222 e sexta à tarde 621 622 623 624', () => {
@@ -172,7 +174,8 @@ teste('Códigos de horário UFPel: 611, 222 e sexta à tarde 621 622 623 624', (
     igual(N.codigoHorario(cfg, 4, 0), '611');
     igual(N.codigoHorario(cfg, 0, 6), '222');
     igual([5, 6, 7, 8].map((h) => N.codigoHorario(cfg, 4, h)).join(' '), '621 622 623 624');
-    igual(N.codigoHorario(cfg, 2, 10), '431');
+    igual(N.codigoHorario(cfg, 4, 10), '626');
+    igual(N.codigoHorario(cfg, 2, 11), '431');
     const d = exemplo();
     d.grade.alocacoes = [5, 6, 7, 8].map((h) => ({ disc: 'secag', d: 4, h, sala: 's101' }));
     igual(N.codigosDisciplina(d, 'secag'), '621 622 623 624');

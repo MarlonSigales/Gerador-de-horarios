@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261116f">
+    <link rel="stylesheet" href="css/style.css?v=20261116g">
 </head>
 <body>
     <header class="topbar">
@@ -80,7 +80,7 @@
                             <fieldset><legend>Dias de aula</legend><div class="checks" id="cfg-dias"></div></fieldset>
                             <fieldset><legend>Horários das aulas (um por linha, início-fim)</legend>
                                 <textarea id="cfg-horarios" rows="10" spellcheck="false"></textarea>
-                                <small>Exemplo: 08:00-08:50. Aulas com até 20 min de intervalo contam como seguidas (podem formar um bloco). O turno vem do início: manhã antes das 12h, tarde antes das 18h, noite depois.</small>
+                                <small>Exemplo: 08:00-08:50. Aulas do mesmo turno com até 20 min de intervalo contam como seguidas (podem formar um bloco). O turno vem do início: manhã antes das 12h, tarde antes das 18h30, noite depois.</small>
                                 <p class="muted" style="margin-top:.4rem"><b>Código do horário</b> (padrão UFPel): dia + turno + período no turno. Dia: domingo 1, segunda 2, terça 3, quarta 4, quinta 5, sexta 6, sábado 7.
                                     Turno: manhã 1, tarde 2, noite 3. Ex.: 611 = sexta, manhã, 1º período; 222 = segunda, tarde, 2º período; sexta à tarde, quatro períodos = 621 622 623 624.</p>
                                 <div id="cfg-codigos" class="tabela-wrap"></div>
@@ -202,12 +202,12 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261116f"></script>
-    <script src="js/exemplo.js?v=20261116f"></script>
-    <script src="js/logos.js?v=20261116f"></script>
+    <script src="js/nucleo.js?v=20261116g"></script>
+    <script src="js/exemplo.js?v=20261116g"></script>
+    <script src="js/logos.js?v=20261116g"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
-    <script src="js/pdf.js?v=20261116f"></script>
-    <script src="js/app.js?v=20261116f"></script>
+    <script src="js/pdf.js?v=20261116g"></script>
+    <script src="js/app.js?v=20261116g"></script>
 </body>
 </html>

@@ -49,7 +49,8 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
-   (5 períodos; 18:00–18:30 sem aula, pois um 6º período iria até 18:50).
+   e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
+   passa de um turno para outro (18:50 → 19:00 quebra o bloco).
 14 [fazer] A mensagem do pedido foi cortada em "gere um pdf com ...": confirmar com o usuário o conteúdo do PDF (hoje: item 10).
 15 [fazer] Testar com os dados reais do curso (cursos, professores, salas e disciplinas da UFPel).
 16 [fazer] Ativar o GitHub Pages do repositório (Settings → Pages → main, / root), se ainda não estiver ativo.
@@ -57,7 +58,7 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 20 de 20 passaram (inclui gerar o PDF no Node, os horários do CEng e os códigos UFPel).
+- node tests/testes.js: 20 de 20 passaram (após o 6º período da tarde) (inclui gerar o PDF no Node, os horários do CEng e os códigos UFPel).
 - Playwright 360 e 1366 px: aba Relação, Configuração e PDF sem estouro e sem erro de JavaScript.
 - Gerador: exemplo (3 cursos, 7 professores, 7 salas, 19 disciplinas, 66 aulas) sem aula sem lugar e sem conflito em 20 sementes.
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript em todas as páginas;
