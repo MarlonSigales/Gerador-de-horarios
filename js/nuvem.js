@@ -7,6 +7,8 @@
  *
  * Pastas na conta:
  *   GeradorDeHorarios/<ano>-<semestre do ano>/<unidade>/<curso>/<curso>-<AAAA-MM-DD_HHhMM>.json
+ *   GeradorDeHorarios/<ano>-<semestre do ano>/<unidade>/_unidade/unidade-<unidade>-<data>.json   (salas, professores, cursos)
+ * Dados individuais dos professores (senha, planos de ensino, RAAD) NUNCA vão para o MEGA: só por download.
  * Cada salvamento é uma versão nova (só o curso, sem as grades dos outros). Para os bloqueios entre cursos, o app lê a
  * versão mais nova de cada outro curso do mesmo período (de todas as unidades: as salas são de todos).
  *
@@ -136,11 +138,30 @@ const Nuvem = (() => {
     async function listar(dados) {
         const per = await pastaPeriodo(dados);
         const r = [];
-        filhos(per).filter((u) => u.directory).forEach((u) => filhos(u).filter((c) => c.directory).forEach((c) => {
+        filhos(per).filter((u) => u.directory).forEach((u) => filhos(u).filter((c) => c.directory && c.name !== '_unidade').forEach((c) => {
             const versoes = filhos(c).filter((f) => !f.directory && /\.json$/i.test(f.name)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             if (versoes.length) r.push({ unidade: u.name, curso: c.name, versoes });
         }));
         return r;
+    }
+
+    /** Salva os dados da unidade (salas, professores, cursos e calendário; nada individual) em <período>/<unidade>/_unidade/. */
+    async function salvarUnidade(dados, exportarUnidade) {
+        const per = await pastaPeriodo(dados);
+        const uni = await pasta(per, nomeSeguro((dados.config.unidade || {}).nome || 'Unidade'));
+        const dir = await pasta(uni, '_unidade');
+        const nome = `unidade-${nomeSeguro((dados.config.unidade || {}).nome)}-${carimbo()}.json`;
+        const bytes = new TextEncoder().encode(JSON.stringify(exportarUnidade(dados), null, 1));
+        await dir.upload({ name: nome, size: bytes.length }, bytes).complete;
+        return `${RAIZ}/${per.name}/${uni.name}/_unidade/${nome}`;
+    }
+    /** Versão mais nova dos dados da unidade no MEGA (ou null). */
+    async function abrirUnidade(dados) {
+        const per = await pastaPeriodo(dados);
+        const uni = filhos(per).find((u) => u.directory && u.name === nomeSeguro((dados.config.unidade || {}).nome || 'Unidade'));
+        const dir = uni && filhos(uni).find((x) => x.directory && x.name === '_unidade');
+        const arq = dir && filhos(dir).filter((f) => !f.directory && /\.json$/i.test(f.name)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+        return arq ? baixarJson(arq) : null;
     }
 
     /** Abre uma versão (arquivo do MEGA) e devolve os dados. */
@@ -158,7 +179,7 @@ const Nuvem = (() => {
         return r;
     }
 
-    return { estado, nomeSeguro, carimbo, conectado, emailLembrado, entrar, sair, garantir, salvar, listar, abrir, outrosCursos };
+    return { estado, nomeSeguro, carimbo, conectado, emailLembrado, entrar, sair, garantir, salvar, listar, abrir, outrosCursos, salvarUnidade, abrirUnidade };
 })();
 
 if (typeof module !== 'undefined') module.exports = Nuvem;

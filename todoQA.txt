@@ -81,10 +81,31 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
    ensino (com outros cursos), pesquisa, indisponível e livre, ranking dos mais usados, quando é reservado para pesquisa;
    PDF dos relatórios. Obs.: o login é só na interface (o app roda no navegador); não protege o arquivo JSON.
 
+37 [resolvido 17/11/2026] Área do professor: login por nome + senha criada no primeiro acesso (hash com sal, só neste
+   navegador). Rendimento: cadeiras e horas (sala, laboratório, aula, preparo, pesquisa, total) contra média ± desvio do
+   curso e da unidade, com posição.
+38 [resolvido 17/11/2026] Planos de ensino: comparados os 2 modelos enviados (dia a dia/PRG .docx e Cobalto). Não têm as
+   mesmas informações: só o do dia a dia tem câmara responsável, local/horário, pré-requisitos, cronograma com datas,
+   atividades discentes e assinaturas; só o Cobalto tem turma, créditos/horas E/D/EX, vínculo do docente, colegiado/
+   grau/nível, outras informações e validação. O app guarda a união e exporta o DOCX no modelo do dia a dia (com turma
+   e outras informações quando preenchidas). Pré-preenchido; cronograma do calendário vigente cuidando de feriados,
+   recessos, pontos facultativos (até 14h), SIIEPE (opção) e datas próprias; exame no período de exames. O conteúdo fica
+   salvo: no semestre seguinte só as datas mudam.
+39 [resolvido 17/11/2026] RAAD do ano corrente pré-preenchido (DOCX no formato do resumo da UFPel): turmas do ano pelo
+   histórico (CH = créditos × 18, T/P pela proporção do plano), projetos unificados, avaliações; pontuação de ensino
+   estimada (10 por hora semanal, como no RAAD 2024 enviado).
+40 [resolvido 17/11/2026] JSON: individual (só por download, sem a senha), curso (horários + relação de professores) e
+   unidade (salas, professores, cursos, calendário; também no MEGA em _unidade). Importar unidade junta pelo nome.
+41 [resolvido 17/11/2026] Verificação interna (adm): médias, desvios padrões, mínimo e máximo das horas dos professores em
+   sala, laboratório, aula, preparo de aula (fator ajustável), pesquisa e total, para o curso e para a unidade; PDF com
+   a lista dos professores e o desvio de cada um (z).
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
    passa de um turno para outro (18:50 → 19:00 quebra o bloco).
+42 [fazer] Conferir o DOCX do plano no Word (gerado e conferido no LibreOffice) e o RAAD com o Cobalto.
+43 [futuro] Ementa e pré-requisitos das disciplinas não estão no catálogo (só nas páginas de cada disciplina na UFPel).
 36 [futuro] Trocar a senha do administrador (hoje fixa admin/admin, como pedido).
 30 [fazer] Testar o MEGA com a conta real do grupo (daqui só deu para testar com um MEGA simulado e a janela de entrada).
 31 [fazer] Catálogo só tem o Centro de Engenharias (unidade 444); para as outras unidades, informar as páginas institucionais.
@@ -96,8 +117,11 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 35 de 35 passaram (inclui MEGA simulado, unidade, turno preferido, matriz, exportação, calendário,
+- node tests/testes.js: 45 de 45 passaram (inclui verificação interna, rendimento, plano/cronograma com feriados,
+  RAAD, dados individuais sem senha, unidade, DOCX e MEGA da unidade). Antes: 35 de 35 passaram (inclui MEGA simulado, unidade, turno preferido, matriz, exportação, calendário,
   pesquisa e relatórios).
+- Playwright 360 e 1366 px (17/11): primeiro acesso do professor, senha errada recusada, rendimento, plano (cronograma +
+  DOCX com o texto), RAAD DOCX, JSON individual sem senha, JSON da unidade, verificação interna PDF; sem estouro/erro.
 - Playwright 360 e 1366 px: calendário (buscar → colar texto → ler; 2027 embutido), login adm (senha errada recusada),
   relatórios e PDFs (grade com calendário no fim; relatórios), sem estouro e sem erro de JS.
 - Playwright 360 e 1366 px: curso pelo catálogo + matriz, turno preferido, exportar (1 curso, sem outros), importar como

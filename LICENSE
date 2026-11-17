@@ -10,6 +10,7 @@ Exceções (componentes de terceiros, com licença própria, mantida nos arquivo
 - js/vendor/jspdf.umd.min.js — jsPDF 2.5, licença MIT (js/vendor/LICENSE-jspdf.txt).
 - js/vendor/jspdf.plugin.autotable.min.js — jsPDF-AutoTable 3.8, licença MIT (js/vendor/LICENSE-jspdf-autotable.txt).
 - js/vendor/megajs.mjs — megajs 1.3 (cliente do MEGA), licença MIT (js/vendor/LICENSE-megajs.txt).
+- js/vendor/docx.umd.js — docx 8.5 (geração de .docx), licença MIT (js/vendor/LICENSE-docx.txt).
 - js/matrizes.js e tools/matrizes-ceng.txt — dados públicos da UFPel (cursos e matrizes curriculares), extraídos de
   institucional.ufpel.edu.br em 17/11/2026.
 Os logotipos da UFPel, do Centro de Engenharias, da Engenharia Agrícola e do Laboratório de Instrumentação Agrícola

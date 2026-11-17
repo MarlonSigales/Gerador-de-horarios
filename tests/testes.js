@@ -389,6 +389,142 @@ teste('Relatórios internos: carga dos professores (com outros cursos) e uso das
     for (let i = 1; i < r.salas.length; i++) ok(r.salas[i - 1].pctEnsino >= r.salas[i].pctEnsino, 'ordem: mais usadas primeiro');
 });
 
+const P = require('../js/planos.js'); global.Nucleo = N;
+const comGradeUm = (semente = 1) => { const d = exemploUm(); d.config.ano = 2027; const r = N.gerar(d, { semente }); d.grade.alocacoes = r.alocacoes; d.grade.geradaEm = 't'; return d; };
+
+teste('Estatística: média e desvio padrão amostral', () => {
+    igual(P.estatistica([2, 4, 4, 4, 5, 5, 7, 9]), { n: 8, media: 5, desvio: 2.14, min: 2, max: 9 });
+    igual(P.estatistica([]).n, 0);
+});
+
+teste('Verificação interna: horas de sala, laboratório, preparo (fator) e totais por professor; curso e unidade', () => {
+    const d = comGradeUm(3);
+    d.config.fatorPreparo = 1.5;
+    const v = P.verificacao(d);
+    const m = v.curso.professores.find((p) => p.nome === 'Marlon Soares Sigales');
+    igual(m.aula, Math.round((m.sala + m.lab) * 100) / 100);
+    igual(m.preparo, Math.round(m.aula * 1.5 * 100) / 100);
+    ok(m.lab > 0, 'Marlon tem aula no laboratório (Instrumentação)');
+    ok(v.unidade.professores.length >= v.curso.professores.length);
+    const ana = v.unidade.professores.find((p) => p.nome.startsWith('Ana'));
+    ok(ana.cursos.length >= 2, 'Ana aparece em mais de um curso na unidade');
+    igual(v.curso.estat.total.n, v.curso.professores.length);
+});
+
+teste('Rendimento do professor: posição e médias do curso e da unidade', () => {
+    const d = comGradeUm(3);
+    const r = P.rendimento(d, 'Marlon Soares Sigales');
+    ok(r.curso.eu && r.curso.posicao >= 1 && r.curso.posicao <= r.curso.de);
+    ok(r.unidade.estat.aula.media > 0);
+});
+
+teste('Plano de ensino: cronograma pula feriados e o conteúdo salvo volta no outro semestre só com datas novas', () => {
+    const d = comGradeUm(1);
+    d.grade.alocacoes = d.grade.alocacoes.filter((a) => a.disc !== 'instal').concat([0, 1, 2].map((h) => ({ disc: 'instal', d: 4, h: 5 + h, sala: 's101' })));
+    const q = d.disciplinas.find((x) => x.id === 'instal');
+    const salvo = { ementa: 'Ementa X', roteiro: 'A\nB | T\nC | P', datasSemAula: '' };
+    const p1 = P.planoDoSemestre(d, q, salvo);
+    const l1 = p1.cronograma.linhas;
+    igual(l1.slice(0, 4).map((l) => [l.dataBR, l.topico]), [['12/03/2027', 'A'], ['19/03/2027', 'B'], ['26/03/2027', 'Não haverá aula — Feriado: Sexta-Feira Santa'], ['02/04/2027', 'C']]);
+    igual(l1[1].tipo, 'T'); igual(l1[3].tipo, 'P');
+    ok(l1.some((l) => l.dataBR === '28/05/2027' && l.semAula), 'recesso 28/05');
+    igual(l1[l1.length - 1].topico, 'Exame'); igual(l1[l1.length - 1].dataBR, '16/07/2027');
+    igual(p1.localHorario.codigos, '621 622 623');
+    d.config.metade = 2;
+    const p2 = P.planoDoSemestre(d, q, salvo);
+    igual(p2.ementa, 'Ementa X');
+    igual(p2.cronograma.linhas[0].dataBR, '06/08/2027');
+    igual(p2.semestre, 2);
+});
+
+teste('Plano: ponto até as 14h só tira aula da manhã; SIIEPE sem aula por padrão; datas próprias sem aula', () => {
+    const d = comGradeUm(1);
+    d.config.calendario.eventos.push({ data: '2027-03-10', tipo: 'ponto', descricao: 'teste', ateHora: '14:00' });
+    d.grade.alocacoes = [{ disc: 'calc1', d: 2, h: 0, sala: 's101' }, { disc: 'calc2', d: 2, h: 7, sala: 's101' }];
+    const manha = P.cronograma(d, d.disciplinas.find((q) => q.id === 'calc1'), P.conteudoPadrao(d, d.disciplinas.find((q) => q.id === 'calc1')));
+    const tarde = P.cronograma(d, d.disciplinas.find((q) => q.id === 'calc2'), Object.assign(P.conteudoPadrao(d, d.disciplinas.find((q) => q.id === 'calc2')), { datasSemAula: '17/03 Semana Acadêmica' }));
+    ok(manha.linhas.find((l) => l.dataBR === '10/03/2027').semAula);
+    ok(!tarde.linhas.find((l) => l.dataBR === '10/03/2027').semAula);
+    ok(tarde.linhas.find((l) => l.dataBR === '17/03/2027').topico.includes('Semana Acadêmica'));
+    d.config.metade = 2;
+    const sii = P.cronograma(d, d.disciplinas.find((q) => q.id === 'calc1'), P.conteudoPadrao(d, d.disciplinas.find((q) => q.id === 'calc1')));
+    ok(sii.linhas.find((l) => l.dataBR === '20/10/2027').semAula, 'SIIEPE (quarta 20/10) sem aula');
+});
+
+teste('RAAD do ano: CH da turma = créditos × 18; dois semestres do ano pelo histórico; projetos', () => {
+    const d = comGradeUm(2);
+    const ind = P.individualVazio('Marlon Soares Sigales');
+    ind.planos = { EAG081: { creditos: 4, cargaTeorica: 45, cargaPratica: 15 } };
+    ind.historico = { '2027/2': [{ periodo: '2027/2', codigo: 'X1', nome: 'Outra', creditos: 2, ch: 36, chT: 36, chP: 0, chE: 0, chEAD: 0, chEX: 0, vinculo: '' }], '2026/2': [{ periodo: '2026/2', codigo: 'V', nome: 'Velha', ch: 99 }] };
+    ind.projetos = [{ projeto: 'P1', acao: 'A', papel: 'Colaborador', ch: 40 }];
+    const r = P.raad(d, ind);
+    igual(r.ano, 2027);
+    const inst = r.turmas.find((t) => t.codigo === 'EAG081');
+    igual([inst.creditos, inst.ch, inst.chT, inst.chP], [4, 72, 54, 18]);
+    ok(r.turmas.some((t) => t.codigo === 'X1') && !r.turmas.some((t) => t.codigo === 'V'), 'só o ano corrente');
+    igual(r.chTotal, r.chEnsino + 40);
+});
+
+teste('Dados individuais: exportar traz planos, RAAD e rendimento, mas nunca a senha', async () => {
+    const d = comGradeUm(2);
+    const ind = P.individualVazio('Marlon Soares Sigales');
+    ind.senhaHash = await P.hashSenha('segredo', ind.sal);
+    ok(ind.senhaHash !== await P.hashSenha('outra', ind.sal));
+    const x = P.exportarIndividual(d, ind);
+    ok(!JSON.stringify(x).includes(ind.senhaHash) && !('senhaHash' in x) && !('sal' in x));
+    igual(x.tipo, 'individual');
+    ok(x.planosDoSemestre.length > 0 && x.raad && x.rendimento);
+});
+
+teste('Unidade: exportar (sem dados individuais) e importar juntando salas e professores pelo nome', () => {
+    const d = comGradeUm(2);
+    d.professores[0].pesquisa = ['1|0'];
+    const u = P.exportarUnidade(d);
+    igual(u.tipo, 'unidade');
+    ok(u.cursos.length === 3, 'este curso + 2 outros');
+    ok(!JSON.stringify(u).includes('senha'));
+    const vazio = N.dadosVazios(); vazio.config.horarios = d.config.horarios;
+    const r = P.importarUnidade(vazio, u);
+    igual([r.salas, r.professores], [d.salas.length, d.professores.length]);
+    igual(vazio.professores[0].pesquisa, ['1|0']);
+    igual(vazio.salas.find((s) => s.nome.startsWith('Lab. de Instrumentação')).responsaveis.length, 1);
+    igual(P.importarUnidade(vazio, u).salas, 0, 'não duplica');
+});
+
+teste('DOCX: plano de ensino e RAAD são gerados (zip .docx com o texto)', async () => {
+    global.LOGOS_PDF = require('vm').runInNewContext(require('fs').readFileSync(path.join(__dirname, '../js/logos.js'), 'utf8') + ';LOGOS_PDF');
+    const X = require('../js/docx-docs.js');
+    const d = comGradeUm(1);
+    const q = d.disciplinas.find((x) => x.id === 'eletrot');
+    const buf = await X.plano(P.planoDoSemestre(d, q, { ementa: 'Ementa de teste', roteiro: 'Apresentação' }));
+    ok(buf.length > 10000 && buf[0] === 0x50 && buf[1] === 0x4b, 'é um zip');
+    const JSZipLike = require('../js/vendor/docx.umd.js'); // a biblioteca já carrega o zip; conferimos o XML direto
+    const txt = buf.toString('latin1');
+    ok(txt.includes('word/document.xml'));
+    const r = await X.raad(P.raad(d, P.individualVazio('Marlon Soares Sigales')));
+    ok(r.length > 10000);
+});
+
+teste('MEGA (simulado): unidade salva em _unidade e não aparece como curso', async () => {
+    const Nuvem = require('../js/nuvem.js');
+    const arq = (name, bytes, ts) => ({ name, directory: false, timestamp: ts, downloadBuffer: async () => bytes });
+    let relogio = 5000;
+    const pasta = (name) => ({ name, directory: true, children: [], async mkdir(n) { const p = pasta(n); this.children.push(p); return p; },
+        upload(meta, bytes) { this.children.push(arq(meta.name, bytes, relogio++)); return { complete: Promise.resolve() }; } });
+    const raiz = pasta('root');
+    Nuvem.estado.simulado = { Storage: function () { this.ready = Promise.resolve(); this.root = raiz; } };
+    Nuvem.estado.storage = null;
+    global.localStorage = { setItem() {}, getItem() { return ''; } };
+    await Nuvem.entrar('grupo@exemplo', 'x');
+    const d = comGradeUm(2);
+    await Nuvem.salvar(d, N.exportarCurso);
+    await Nuvem.salvarUnidade(d, P.exportarUnidade);
+    igual((await Nuvem.listar(d)).map((x) => x.curso), ['Engenharia Agricola']);
+    const u = await Nuvem.abrirUnidade(d);
+    igual([u.tipo, u.salas.length], ['unidade', d.salas.length]);
+    Nuvem.estado.simulado = null;
+});
+
 teste('Arquivo: normalizar completa campos faltando', () => {
     const d = N.normalizar({ cursos: [{ nome: 'X' }], disciplinas: [{ nome: 'Y', ofertas: [{ curso: 'c', semestre: '3' }] }] });
     igual(d.cursos[0].semestres, 10);

@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261117d">
+    <link rel="stylesheet" href="css/style.css?v=20261117f">
 </head>
 <body>
     <header class="topbar">
@@ -132,6 +132,17 @@
                                 os professores e salas que eles já usam ficam bloqueados aqui (página “Outros cursos”).</p>
                             <div id="curso-pagina"></div>
                         </div>
+                        <div class="card">
+                            <div class="card-topo"><h2>Unidade</h2></div>
+                            <p class="muted">Dados da unidade (salas, laboratórios, professores, cursos e calendário — nada individual) para dividir entre os cursos.
+                                Importar junta o que falta pelo nome (não apaga nada).</p>
+                            <div class="barra">
+                                <button type="button" class="btn btn-secondary btn-sm" data-acao="unidade-exportar">⬇ Exportar unidade (JSON)</button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-acao="unidade-importar">⬆ Importar unidade (JSON)</button>
+                                <button type="button" class="btn btn-primary btn-sm" data-acao="unidade-mega-salvar">☁️ Salvar unidade no MEGA</button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-acao="unidade-mega-abrir">☁️ Trazer unidade do MEGA</button>
+                            </div>
+                        </div>
                     </section>
 
                     <section class="pagina" id="p-outros" data-titulo="Outros cursos" hidden>
@@ -210,6 +221,10 @@
                         </div>
                     </section>
 
+                    <section class="pagina" id="p-professor" data-titulo="Área do professor" hidden>
+                        <div id="professor-conteudo"></div>
+                    </section>
+
                     <section class="pagina" id="p-relatorios" data-titulo="Relatórios internos" hidden>
                         <div id="relatorios-conteudo"></div>
                     </section>
@@ -258,14 +273,17 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261117d"></script>
-    <script src="js/matrizes.js?v=20261117d"></script>
-    <script src="js/exemplo.js?v=20261117d"></script>
-    <script src="js/nuvem.js?v=20261117d"></script>
-    <script src="js/logos.js?v=20261117d"></script>
+    <script src="js/nucleo.js?v=20261117f"></script>
+    <script src="js/matrizes.js?v=20261117f"></script>
+    <script src="js/exemplo.js?v=20261117f"></script>
+    <script src="js/nuvem.js?v=20261117f"></script>
+    <script src="js/planos.js?v=20261117f"></script>
+    <script src="js/logos.js?v=20261117f"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
-    <script src="js/pdf.js?v=20261117d"></script>
-    <script src="js/app.js?v=20261117d"></script>
+    <script src="js/vendor/docx.umd.js"></script>
+    <script src="js/docx-docs.js?v=20261117f"></script>
+    <script src="js/pdf.js?v=20261117f"></script>
+    <script src="js/app.js?v=20261117f"></script>
 </body>
 </html>

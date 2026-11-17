@@ -245,3 +245,4 @@ table.grade td.pesquisa { background: repeating-linear-gradient(45deg, #f6f1fd, 
 .etiqueta.pesq { color: #5b3fa0; background: #f1eafc; border-color: #d8c8f4; }
 .barra-uso { display: flex; height: 10px; background: #e3ecea; border-radius: 5px; overflow: hidden; min-width: 90px; }
 .barra-uso i { display: block; height: 100%; }
+.duas-colunas > * { min-width: 0; }

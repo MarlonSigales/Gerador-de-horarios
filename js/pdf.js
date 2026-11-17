@@ -336,7 +336,49 @@ const GeradorPDF = (() => {
         return doc;
     }
 
-    return { gerar, relatorios, txt };
+    /** Documento de verificação interna (curso e unidade): médias e desvios padrões das horas dos professores. */
+    function verificacao(D, op = {}) {
+        const N = typeof Nucleo !== 'undefined' ? Nucleo : require('./nucleo.js');
+        const P = typeof Planos !== 'undefined' ? Planos : require('./planos.js');
+        const JsPDF = (typeof window !== 'undefined' && window.jspdf) ? window.jspdf.jsPDF : op.jsPDF;
+        const doc = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+        const cfg = D.config, v = P.verificacao(D);
+        const topo = (titulo, sub) => {
+            let x = 10;
+            ['ufpel', 'ceng', 'ea', 'lia'].forEach((k) => { const l = typeof LOGOS_PDF !== 'undefined' && LOGOS_PDF[k]; if (!l) return; const w = 12 * l.w / l.h; try { doc.addImage(l.src, 'PNG', x, 7, w, 12); } catch (e) { /* ok */ } x += w + 3; });
+            doc.setTextColor(...VERDE); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text(txt(titulo), W - 10, 12, { align: 'right' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...CINZA); doc.text(txt(sub), W - 10, 17.5, { align: 'right' });
+            doc.setDrawColor(168, 225, 86); doc.setLineWidth(0.8); doc.line(10, 21.5, W - 10, 21.5); doc.setTextColor(0, 0, 0);
+        };
+        const nomes = { sala: 'Sala de aula', lab: 'Laboratório', aula: 'Aula (total)', preparo: 'Preparo de aula', pesquisa: 'Pesquisa (reservada)', total: 'Total', disciplinas: 'Cadeiras (nº)' };
+        const fmt = (x) => String(x).replace('.', ',');
+        const bloco = (titulo, b, primeiro) => {
+            if (!primeiro) doc.addPage();
+            topo(`Verificação interna — ${titulo}`, `Uso interno — ${(cfg.unidade || {}).nome || ''} — ${cfg.ano}/${cfg.metade} — preparo = ${fmt(v.fatorPreparo)} h por hora de aula`);
+            doc.setFontSize(8.5);
+            doc.text(doc.splitTextToSize(txt('Horas por semana de cada professor nesta grade' + (titulo.startsWith('Unidade') ? ' e nos outros cursos da mesma unidade carregados (turma conjunta conta uma vez)' : '') + '. Desvio padrão amostral. Laboratório = aula em sala cadastrada como laboratório (ou com nome iniciado por "Lab").'), W - 20), 10, 27);
+            doc.autoTable({ startY: 33, margin: { left: 10, right: 10, bottom: 12 }, head: [['Horas/semana', 'n', 'Média', 'Desvio padrão', 'Mínimo', 'Máximo']],
+                body: Object.entries(nomes).map(([k, rot]) => { const e = b.estat[k]; return [rot, e.n, fmt(e.media), fmt(e.desvio), fmt(e.min), fmt(e.max)].map(txt); }),
+                theme: 'grid', headStyles: { fillColor: VERDE }, styles: { fontSize: 9 }, columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } } });
+            const m = b.estat.total;
+            doc.autoTable({ startY: doc.lastAutoTable.finalY + 6, margin: { left: 10, right: 10, bottom: 12 },
+                head: [['Professor', 'Cadeiras', 'Sala (h)', 'Laboratório (h)', 'Aula (h)', 'Preparo (h)', 'Pesquisa (h)', 'Total (h)', 'Desvio do total (z)', 'Cursos']],
+                body: b.professores.map((p) => [p.nome, p.disciplinas, fmt(p.sala), fmt(p.lab), fmt(p.aula), fmt(p.preparo), fmt(p.pesquisa), fmt(p.total), m.desvio ? fmt(Math.round((p.total - m.media) / m.desvio * 100) / 100) : '—', p.cursos.join(', ')].map(txt)),
+                theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 8 },
+                didParseCell: (h) => { if (h.section !== 'body' || !m.desvio) return; const p = b.professores[h.row.index]; const z = (p.total - m.media) / m.desvio; if (z >= 1) h.cell.styles.fillColor = AMARELO_CLARO; if (z <= -1) h.cell.styles.fillColor = [232, 243, 250]; } });
+            doc.setFontSize(7.5); doc.setTextColor(...CINZA);
+            doc.text(txt('Amarelo: total 1 desvio padrão ou mais acima da média; azul: 1 desvio padrão ou mais abaixo.'), 10, Math.min(H - 14, doc.lastAutoTable.finalY + 5));
+            doc.setTextColor(0, 0, 0);
+        };
+        bloco(`Curso: ${(D.cursos[0] || {}).nome || ''}`, v.curso, true);
+        bloco(`Unidade: ${(cfg.unidade || {}).nome || ''}`, v.unidade, false);
+        const total = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= total; i++) { doc.setPage(i); doc.setFontSize(7); doc.setTextColor(...CINZA); doc.text(txt(`Gerador de Horários — verificação interna — gerado em ${new Date().toLocaleDateString('pt-BR')}`), 10, H - 5); doc.text(`Página ${i} de ${total}`, W - 10, H - 5, { align: 'right' }); }
+        return doc;
+    }
+
+    return { gerar, relatorios, verificacao, txt };
 })();
 
 if (typeof module !== 'undefined') module.exports = GeradorPDF;

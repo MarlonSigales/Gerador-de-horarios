@@ -7,7 +7,7 @@
 
 'use strict';
 
-/* global Nucleo, Exemplo, GeradorPDF, Nuvem, CATALOGO_UFPEL */
+/* global Nucleo, Exemplo, GeradorPDF, Nuvem, CATALOGO_UFPEL, Planos, DocxDocs */
 (() => {
     const N = Nucleo;
     const CHAVE_LOCAL = 'gerador-horarios-v1';
@@ -55,6 +55,7 @@
         { id: 'outros', titulo: 'Outros cursos', num: 6, conta: () => (D.externos || []).length },
         { id: 'grade', titulo: 'Grade', num: 7, conta: () => { const c = N.conflitos(D); return c.erros ? { t: `⚠ ${c.erros}`, ruim: true } : (D.grade.alocacoes.length ? '✓' : ''); } },
         { id: 'pdf', titulo: 'PDF', num: 8 },
+        { id: 'professor', titulo: 'Área do professor', icone: '👤' },
         { id: 'relatorios', titulo: 'Relatórios (adm)', icone: '🔒' }
     ];
     const DESCR = {
@@ -104,6 +105,7 @@
         if (ui.pagina === 'grade') renderGradePagina();
         if (ui.pagina === 'pdf') renderPdfInfo();
         if (ui.pagina === 'relatorios') renderRelatorios();
+        if (ui.pagina === 'professor') renderProfessor();
     }
 
     // ================================================================ configuração
@@ -736,6 +738,17 @@
         return true;
     }
     function sairAdmin() { ui.admin = false; try { sessionStorage.removeItem('gh_admin'); } catch (e) { /* ok */ } renderRelatorios(); }
+    function htmlVerificacao() {
+        const v = Planos.verificacao(D);
+        const nomes = { sala: 'Sala de aula', lab: 'Laboratório', aula: 'Aula (total)', preparo: 'Preparo de aula', pesquisa: 'Pesquisa', total: 'Total', disciplinas: 'Cadeiras' };
+        const tab = (b) => `<div class="tabela-wrap"><table class="lista"><thead><tr><th>Horas/semana por professor</th><th>n</th><th>Média</th><th>Desvio padrão</th><th>Mínimo</th><th>Máximo</th></tr></thead><tbody>
+            ${Object.entries(nomes).map(([k, rot]) => { const e = b.estat[k]; return `<tr><td><b>${rot}</b></td><td>${e.n}</td><td>${e.media}</td><td>${e.desvio}</td><td>${e.min}</td><td>${e.max}</td></tr>`; }).join('')}</tbody></table></div>`;
+        return `<div class="card"><div class="card-topo"><h2>Verificação interna — médias e desvios padrões</h2>
+            <button type="button" class="btn btn-primary btn-sm" data-acao="verificacao-pdf">📄 Documento de verificação (PDF)</button></div>
+            <div class="campos" style="max-width:520px"><label class="campo"><span>Horas de preparo por hora de aula</span><input type="number" step="0.1" min="0" id="fator-preparo" value="${v.fatorPreparo}">
+            <small>Estimativa usada para "preparo de aula" (aqui e na área do professor).</small></label></div>
+            <div class="duas-colunas"><div><h3>Curso (${esc(D.cursos[0] ? D.cursos[0].nome : '')})</h3>${tab(v.curso)}</div><div><h3>Unidade (este curso + ${(D.externos || []).length} outro(s))</h3>${tab(v.unidade)}</div></div></div>`;
+    }
     const barra = (pct, cor) => `<span class="barra-uso"><i style="width:${Math.min(100, pct)}%;background:${cor}"></i></span>`;
     function renderRelatorios() {
         const el = $('#relatorios-conteudo');
@@ -760,6 +773,7 @@
             <button type="button" class="btn btn-secondary btn-sm" data-acao="sair-admin">Sair</button></div></div>
             <p class="muted">${esc(D.cursos[0] ? D.cursos[0].nome : '')} · ${D.config.ano}/${D.config.metade} · semana com ${r.horasSemana} h de aula possíveis por sala (${D.config.dias.length} dias × ${D.config.horarios.length} períodos).
             Professores: carga nesta grade + horários ocupados nos outros cursos da mesma unidade carregados. Aulas = períodos.</p></div>
+            ${htmlVerificacao()}
             <div class="card"><h2>Professores — quem trabalha mais</h2><div class="tabela-wrap"><table class="lista"><thead><tr><th>#</th><th>Professor</th><th>Aulas aqui</th><th>Horas aqui</th><th>Horas em outros cursos</th><th>Total (h/sem.)</th><th></th><th>Pesquisa (h/sem.)</th><th>Disciplinas</th><th>Dias / turnos</th><th>Responsável por</th></tr></thead><tbody>
             ${r.professores.map((p, i) => `<tr><td>${i + 1}</td><td><b>${esc(p.nome)}</b></td><td>${p.aulas}</td><td>${p.horas}</td><td>${p.outrosCursosHoras || '—'}</td><td><b>${p.total}</b></td>
                 <td style="min-width:110px">${barra(100 * p.total / maxP, 'var(--verde)')}</td><td>${p.pesquisaHoras ? `<span class="etiqueta pesq">${p.pesquisaHoras}</span>` : '—'}</td>
@@ -777,6 +791,200 @@
                     <td class="codigos" style="white-space:normal">${x.l.map((k) => { const [d, h] = N.separa(k); return D.config.horarios[h] && d < D.config.dias.length ? N.codigoHorario(D.config, d, h) : null; }).filter(Boolean).sort().join(' ')}</td></tr>`).join('')}</tbody></table>`
                     : '<p class="vazio">Nenhum horário reservado para pesquisa. Marque em Salas e laboratórios ou em Professores (campo “Horários reservados para pesquisa”).</p>';
             })()}</div>`;
+    }
+
+
+    // ================================================================ área do professor (dados individuais: só neste navegador e por download)
+    const CHAVE_IND = (nome) => 'gh_ind_' + N.normNome(nome).replace(/\s+/g, '_');
+    function carregarInd(nome) { try { const t = localStorage.getItem(CHAVE_IND(nome)); if (t) return Object.assign(Planos.individualVazio(nome), JSON.parse(t)); } catch (e) { /* ok */ } return null; }
+    function salvarInd(ind) { ind.atualizadoEm = new Date().toISOString(); try { localStorage.setItem(CHAVE_IND(ind.nome), JSON.stringify(ind)); } catch (e) { aviso('Não consegui guardar neste navegador (armazenamento cheio ou bloqueado). Baixe seus dados.'); } }
+    const profLogado = () => { try { const n = sessionStorage.getItem('gh_prof'); return n ? carregarInd(n) : null; } catch (e) { return ui.prof ? carregarInd(ui.prof) : null; } };
+    function sairProfessor() { ui.prof = null; try { sessionStorage.removeItem('gh_prof'); } catch (e) { /* ok */ } renderProfessor(); }
+    function entrarComo(nome) { ui.prof = nome; try { sessionStorage.setItem('gh_prof', nome); } catch (e) { /* ok */ } }
+    let abaProf = 'rendimento';
+
+    function renderProfessor() {
+        const el = $('#professor-conteudo');
+        const ind = profLogado();
+        if (!ind) {
+            const nomes = D.professores.map((p) => p.nome).sort((a, b) => a.localeCompare(b));
+            el.innerHTML = `<form class="card" id="form-prof" autocomplete="on" style="max-width:520px"><h2>👤 Área do professor</h2>
+                <p class="muted">Veja seu rendimento, prepare os planos de ensino (pré-preenchidos, com o cronograma do calendário vigente) e o RAAD do ano.
+                Seus dados ficam só neste navegador e no arquivo que você baixar — nunca vão para o MEGA.</p>
+                <div class="campos"><label class="campo"><span>Seu nome</span><select name="nome" autocomplete="username">${nomes.map((n) => `<option>${esc(n)}</option>`).join('')}</select></label></div>
+                <div id="prof-senhas"></div><p class="muted" id="prof-erro" style="color:var(--perigo)"></p>
+                <div class="barra"><button type="submit" class="btn btn-primary">Entrar</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-acao="ind-importar">⬆ Trazer meus dados (JSON)</button></div></form>`;
+            const pinta = () => {
+                const nome = $('#form-prof [name=nome]').value, ind0 = nome && carregarInd(nome);
+                $('#prof-senhas').innerHTML = ind0 && ind0.senhaHash ? `<div class="campos"><label class="campo"><span>Senha</span><input type="password" name="senha" autocomplete="current-password"></label></div>`
+                    : `<p class="muted"><b>Primeiro acesso neste navegador:</b> crie sua senha.</p><div class="campos"><label class="campo"><span>Nova senha</span><input type="password" name="senha" autocomplete="new-password"></label>
+                       <label class="campo"><span>Repita a senha</span><input type="password" name="senha2" autocomplete="new-password"></label></div>`;
+            };
+            if (!nomes.length) { el.innerHTML = '<div class="card"><p class="vazio">Cadastre os professores primeiro.</p></div>'; return; }
+            pinta();
+            $('#form-prof [name=nome]').addEventListener('change', pinta);
+            $('#form-prof').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const nome = $('#form-prof [name=nome]').value, senha = $('#form-prof [name=senha]').value;
+                let ind1 = carregarInd(nome);
+                if (!ind1 || !ind1.senhaHash) {
+                    const s2 = ($('#form-prof [name=senha2]') || {}).value;
+                    if (!senha || senha.length < 4) { $('#prof-erro').textContent = 'A senha precisa ter pelo menos 4 caracteres.'; return; }
+                    if (senha !== s2) { $('#prof-erro').textContent = 'As senhas não conferem.'; return; }
+                    ind1 = ind1 || Planos.individualVazio(nome);
+                    ind1.senhaHash = await Planos.hashSenha(senha, ind1.sal);
+                } else if (await Planos.hashSenha(senha, ind1.sal) !== ind1.senhaHash) { $('#prof-erro').textContent = 'Senha não confere.'; return; }
+                Planos.registrarSemestre(ind1, D); salvarInd(ind1); entrarComo(nome); renderProfessor();
+            });
+            return;
+        }
+        const abas = [['rendimento', '📊 Rendimento'], ['planos', '📝 Planos de ensino'], ['raad', '📄 RAAD'], ['dados', '💾 Meus dados']];
+        let corpo = '';
+        if (abaProf === 'rendimento') corpo = htmlRendimento(ind);
+        if (abaProf === 'planos') corpo = htmlPlanos(ind);
+        if (abaProf === 'raad') corpo = htmlRaad(ind);
+        if (abaProf === 'dados') corpo = htmlDados(ind);
+        el.innerHTML = `<div class="card"><div class="card-topo"><h2>👤 ${esc(ind.nome)}</h2><button type="button" class="btn btn-secondary btn-sm" data-acao="prof-sair">Sair</button></div>
+            <div class="abas">${abas.map(([k, t]) => `<button type="button" data-aba-prof="${k}" class="${abaProf === k ? 'ativo' : ''}">${t}</button>`).join('')}</div></div>${corpo}`;
+    }
+    function htmlRendimento(ind) {
+        const r = Planos.rendimento(D, ind.nome);
+        const linha = (rot, campo, un) => {
+            const eu = (r.curso.eu || {})[campo] || 0, ue = (r.unidade.eu || {})[campo] || 0;
+            const mc = r.curso.estat[campo] || {}, mu = r.unidade.estat[campo] || {};
+            const mx = Math.max(eu, ue, mc.max || 0, mu.max || 0, 0.01);
+            const b = (v, cor) => `<span class="barra-uso" title="${v}"><i style="width:${100 * v / mx}%;background:${cor}"></i></span>`;
+            return `<tr><td><b>${rot}</b></td><td>${eu}${un}</td><td>${mc.media || 0}${un} <small>± ${mc.desvio || 0}</small></td><td>${ue}${un}</td><td>${mu.media || 0}${un} <small>± ${mu.desvio || 0}</small></td>
+                <td style="min-width:140px">${b(eu, 'var(--teal)')}${b(mc.media || 0, 'var(--verde)')}${b(mu.media || 0, 'var(--limao)')}</td></tr>`;
+        };
+        return `<div class="card"><h2>Seu rendimento em ${D.config.ano}/${D.config.metade}</h2>
+            <p class="muted">Horas por semana. Preparo = ${r.fatorPreparo} h por hora de aula (fator definido pela administração). Unidade = este curso + outros cursos da mesma unidade carregados (${(D.externos || []).length}).
+            ${r.curso.posicao ? `Em horas de aula você é o ${r.curso.posicao}º de ${r.curso.de} no curso` : 'Você não tem aula neste curso'}${r.unidade.posicao ? ` e o ${r.unidade.posicao}º de ${r.unidade.de} na unidade` : ''}.</p>
+            <div class="tabela-wrap"><table class="lista"><thead><tr><th></th><th>Você (curso)</th><th>Média do curso ± desvio</th><th>Você (unidade)</th><th>Média da unidade ± desvio</th><th></th></tr></thead><tbody>
+            ${linha('Cadeiras (disciplinas)', 'disciplinas', '')}${linha('Horas em sala de aula', 'sala', ' h')}${linha('Horas em laboratório', 'lab', ' h')}${linha('Horas de aula (total)', 'aula', ' h')}
+            ${linha('Horas preparando aula', 'preparo', ' h')}${linha('Horas de pesquisa (reservadas)', 'pesquisa', ' h')}${linha('Total', 'total', ' h')}</tbody></table></div>
+            <div class="legenda"><span><i style="background:var(--teal)"></i>você</span><span><i style="background:var(--verde)"></i>média do curso</span><span><i style="background:var(--limao)"></i>média da unidade</span></div></div>`;
+    }
+    const minhasDisc = (ind) => { const p = D.professores.find((x) => N.normNome(x.nome) === N.normNome(ind.nome)); return p ? D.disciplinas.filter((q) => q.professor === p.id && q.aulas > 0) : []; };
+    function htmlPlanos(ind) {
+        const lista = minhasDisc(ind);
+        return `<div class="card"><h2>Planos de ensino ${D.config.ano}/${D.config.metade}</h2>
+            <p class="muted">O plano vem pré-preenchido (identificação, cursos atendidos, local/horário, carga, docência) e o cronograma sai das datas do calendário acadêmico vigente, pulando feriados,
+            recessos e pontos facultativos. O conteúdo que você escrever (ementa, objetivos, programa, roteiro de tópicos, avaliação, bibliografia) fica salvo: no próximo semestre só as datas mudam.</p>
+            ${lista.length ? `<table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Horários</th><th>Plano</th><th></th></tr></thead><tbody>${lista.map((q) => {
+                const salvo = (ind.planos || {})[q.codigo || q.id];
+                return `<tr><td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b></td><td class="codigos">${esc(N.codigosDisciplina(D, q.id)) || '<small>fora da grade</small>'}</td>
+                    <td>${salvo ? `<span class="etiqueta oferta">salvo${salvo.salvoEm ? ' em ' + esc(new Date(salvo.salvoEm).toLocaleDateString('pt-BR')) : ''}</span>` : '<span class="etiqueta">pré-preenchido</span>'}</td>
+                    <td class="acoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="plano-editar" data-id="${esc(q.id)}">Editar</button>
+                    <button type="button" class="btn btn-primary btn-sm" data-acao="plano-docx" data-id="${esc(q.id)}">⬇ DOCX</button></td></tr>`;
+            }).join('')}</tbody></table>` : '<p class="vazio">Nenhuma disciplina sua com aula nesta grade.</p>'}</div>`;
+    }
+    function editarPlano(ind, discId) {
+        const q = D.disciplinas.find((x) => x.id === discId);
+        const c = Planos.conteudo(D, q, (ind.planos || {})[q.codigo || q.id]);
+        const t = (nome, rot, linhas = 4, dica = '') => `<label class="campo" style="grid-column:1/-1"><span>${rot}</span><textarea name="${nome}" rows="${linhas}" style="font-family:inherit">${esc(c[nome] || '')}</textarea>${dica ? `<small>${dica}</small>` : ''}</label>`;
+        const i = (nome, rot, dica = '') => `<label class="campo"><span>${rot}</span><input type="text" name="${nome}" value="${esc(c[nome] === undefined ? '' : c[nome])}">${dica ? `<small>${dica}</small>` : ''}</label>`;
+        abrirJanela(`Plano de ensino — ${N.nomeDisc(q)}`, `
+            <p class="muted">${D.config.ano}/${D.config.metade} · cursos atendidos: ${esc(Planos.cursosAtendidos(D, q).join(' / ') || '—')} · local/horário: ${esc(Planos.localHorario(D, q).texto || '—')}</p>
+            <fieldset><legend>1. Identificação</legend><div class="campos">${i('turma', 'Turma (Cobalto)', 'ex.: M2')}${i('codigoUnidade', 'Código da unidade')}${i('responsavel', '1.3 Responsável')}
+                ${i('creditos', '1.7 Créditos')}${i('cargaTeorica', 'Carga teórica (h)')}${i('cargaPratica', 'Carga prática (h)')}${i('preRequisitos', '1.11 Pré-requisito(s)')}
+                <label class="campo"><span>1.9 Currículo</span><select name="curriculo"><option value="semestral"${c.curriculo !== 'anual' ? ' selected' : ''}>semestral</option><option value="anual"${c.curriculo === 'anual' ? ' selected' : ''}>anual</option></select></label></div></fieldset>
+            <fieldset><legend>2. Docência (encargo didático semanal, horas)</legend>
+                <textarea name="docentes" rows="3" spellcheck="false">${esc((c.docentes || []).map((d) => `${d.nome} | ${d.teorica || 0} | ${d.pratica || 0} | ${d.vinculo || ''}`).join('\n'))}</textarea>
+                <small>Um por linha: Nome | teórica | prática | vínculo. O primeiro é o professor regente.</small>
+                ${t('observacoesDocencia', '2.2 Observações', 2)}</fieldset>
+            <div class="campos">${t('ementa', '3. Ementa', 3)}${t('objetivoGeral', '4.1 Objetivo geral', 2)}${t('objetivosEspecificos', '4.2 Objetivos específicos', 4, 'Um por linha.')}
+                ${t('metodologia', '5. Metodologia de ensino', 3)}${t('programa', '6. Programa (conteúdo/unidades)', 8)}</div>
+            <fieldset><legend>7. Cronograma — roteiro de tópicos</legend>
+                ${t('roteiro', 'Um tópico por encontro, na ordem (no fim da linha: | T, | P ou | T/P)', 8, 'As datas saem do calendário vigente; feriados, recessos e pontos facultativos viram "Não haverá aula" e os tópicos seguem no próximo encontro.')}
+                <div class="campos"><label class="campo"><span>Eventos do calendário (SIIEPE, Mostra de Cursos…)</span><select name="eventosSemAula">
+                    <option value="siiepe"${c.eventosSemAula === 'siiepe' || c.eventosSemAula === true ? ' selected' : ''}>Só a SIIEPE é sem aula</option><option value="todos"${c.eventosSemAula === 'todos' ? ' selected' : ''}>Todos sem aula</option><option value="nenhum"${c.eventosSemAula === 'nenhum' || c.eventosSemAula === false ? ' selected' : ''}>Há aula em todos</option></select></label>
+                ${t('datasSemAula', 'Outras datas sem aula (DD/MM motivo, uma por linha)', 2, 'Ex.: 29/10 Semana Acadêmica')}</div>
+                <button type="button" class="btn btn-secondary btn-sm" data-ver-crono>Ver cronograma</button><div id="crono-previa" class="tabela-wrap" style="margin-top:.4rem"></div></fieldset>
+            <div class="campos">${t('atividadesDiscentes', '8. Atividades discentes', 2)}${t('avaliacao', '9. Critérios de avaliação', 5)}
+                ${t('bibliografiaBasica', '10.1 Bibliografia básica', 4)}${t('bibliografiaComplementar', '10.2 Bibliografia complementar', 4)}
+                ${t('aprovacoes', '11. Aprovações', 3)}${t('outrasInformacoes', 'Outras informações (Cobalto)', 2)}</div>`,
+        (dlg) => { ind.planos = ind.planos || {}; ind.planos[q.codigo || q.id] = lerPlanoForm(dlg, c); Planos.registrarSemestre(ind, D); salvarInd(ind); aviso('Plano salvo (fica para os próximos semestres; só as datas mudam).'); return true; },
+        (dlg) => {
+            $('[data-ver-crono]', dlg).addEventListener('click', () => {
+                const cr = Planos.cronograma(D, q, lerPlanoForm(dlg, c));
+                $('#crono-previa', dlg).innerHTML = `${cr.avisos.map((a) => `<p class="muted" style="color:#7a5a00">⚠ ${esc(a)}</p>`).join('')}<table class="lista"><thead><tr><th>Semana</th><th>Data</th><th>Tópico</th><th>T/P</th></tr></thead><tbody>
+                    ${cr.linhas.map((l) => `<tr style="${l.semAula ? 'color:var(--suave);font-style:italic' : ''}"><td>${l.semana}</td><td>${l.dataBR}</td><td>${esc(l.topico)}</td><td>${l.tipo}</td></tr>`).join('')}</tbody></table>`;
+            });
+            return {};
+        });
+    }
+    function lerPlanoForm(dlg, base) {
+        const c = Object.assign({}, base);
+        $$('[name]', dlg).forEach((el) => { if (el.name !== 'docentes') c[el.name] = el.value; });
+        ['creditos', 'cargaTeorica', 'cargaPratica'].forEach((k) => { c[k] = Number(String(c[k]).replace(',', '.')) || 0; });
+        c.docentes = $('[name=docentes]', dlg).value.split(/\n+/).map((l) => l.split('|').map((x) => x.trim())).filter((x) => x[0]).map(([nome, t, p, v], i) => ({ nome, teorica: Number(t) || 0, pratica: Number(p) || 0, vinculo: v || (i ? '' : 'Professor Regente') }));
+        c.salvoEm = new Date().toISOString();
+        return c;
+    }
+    async function baixarPlanoDocx(ind, discId) {
+        const q = D.disciplinas.find((x) => x.id === discId);
+        try {
+            const blob = await DocxDocs.plano(Planos.planoDoSemestre(D, q, (ind.planos || {})[q.codigo || q.id]));
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `plano-de-ensino-${q.codigo || 'disciplina'}-${D.config.ano}-${D.config.metade}.docx`; document.body.appendChild(a); a.click(); a.remove();
+            aviso('Plano de ensino (.docx) baixado.');
+        } catch (e) { aviso('Não consegui gerar o DOCX: ' + esc(e.message)); }
+    }
+    function htmlRaad(ind) {
+        const r = Planos.raad(D, ind), p = ind.perfil || {};
+        const i = (nome, rot, val) => `<label class="campo"><span>${rot}</span><input type="text" data-perfil="${nome}" value="${esc(val || '')}"></label>`;
+        const anos = Object.keys(ind.historico || {}).filter((k) => Number(k.split('/')[0]) === r.ano).sort();
+        return `<div class="card"><div class="card-topo"><h2>RAAD ${r.ano} (pré-preenchido)</h2><div class="barra" style="margin:0">
+            <button type="button" class="btn btn-secondary btn-sm" data-acao="raad-salvar">Salvar</button><button type="button" class="btn btn-primary btn-sm" data-acao="raad-docx">⬇ RAAD (DOCX)</button></div></div>
+            <p class="muted">Sempre do ano corrente da grade (${r.ano}). O ensino vem das turmas dos semestres guardados no seu histórico (${anos.join(', ') || 'só o atual'}): CH da turma = créditos × 18,
+            dividida em teórica/prática pela proporção do plano de ensino. Para entrar o outro semestre do ano, abra a grade dele e entre aqui (o semestre é registrado ao entrar).
+            A pontuação de ensino é estimada (10 pontos por hora semanal, como no RAAD de referência); a oficial é do Cobalto.</p>
+            <div class="campos">${i('siape', 'SIAPE', p.siape)}${i('departamento', 'Departamento', p.departamento || (D.config.unidade || {}).nome)}${i('ingressoUfpel', 'Data de ingresso na UFPel', p.ingressoUfpel)}
+                ${i('ingressoCargo', 'Data de ingresso no cargo', p.ingressoCargo)}${i('jornada', 'Jornada de trabalho (h)', p.jornada || '40')}
+                <label class="campo"><span>Nota da chefia</span><input type="text" data-aval="chefia" value="${esc((ind.avaliacoes || {}).chefia || '')}"></label>
+                <label class="campo"><span>Nota final discente</span><input type="text" data-aval="discente" value="${esc((ind.avaliacoes || {}).discente || '')}"></label></div>
+            <label class="campo"><span>Projetos unificados (um por linha: Projeto | Ação | Papel | CH)</span><textarea id="raad-projetos" rows="5" spellcheck="false">${esc((ind.projetos || []).map((x) => `${x.projeto} | ${x.acao || ''} | ${x.papel || ''} | ${x.ch || ''}`).join('\n'))}</textarea>
+                <small>Ficam guardados de um ano para o outro; ajuste as CHs.</small></label>
+            <h3>Ensino ${r.ano}: ${r.chEnsino} h · média ${String(r.horasSemanais).replace('.', ',')} h/semana · pontos estimados ${String(r.pontosEnsinoEstimados).replace('.', ',')}</h3>
+            <table class="lista"><thead><tr><th>Período</th><th>Código</th><th>Disciplina</th><th>Créditos</th><th>CH</th><th>CH_T</th><th>CH_P</th></tr></thead><tbody>
+            ${r.turmas.map((x) => `<tr><td>${x.periodo}</td><td>${esc(x.codigo)}</td><td>${esc(x.nome)}</td><td>${x.creditos}</td><td><b>${x.ch}</b></td><td>${x.chT}</td><td>${x.chP}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhuma turma no ano.</td></tr>'}</tbody></table>
+            <p><b>CH total (ensino + projetos):</b> ${r.chTotal} h</p></div>`;
+    }
+    function salvarRaadForm(ind) {
+        ind.perfil = ind.perfil || {}; ind.avaliacoes = ind.avaliacoes || {};
+        $$('[data-perfil]').forEach((el) => { ind.perfil[el.dataset.perfil] = el.value.trim(); });
+        $$('[data-aval]').forEach((el) => { ind.avaliacoes[el.dataset.aval] = el.value.trim(); });
+        ind.projetos = $('#raad-projetos').value.split(/\n+/).map((l) => l.split('|').map((x) => x.trim())).filter((x) => x[0]).map(([projeto, acao, papel, ch]) => ({ projeto, acao: acao || '', papel: papel || '', ch: Number(String(ch || '').replace(',', '.')) || 0 }));
+        salvarInd(ind);
+    }
+    function htmlDados(ind) {
+        return `<div class="card"><h2>Meus dados</h2>
+            <p class="muted">Ficam só neste navegador (com senha) e no arquivo que você baixar. Nunca vão para o MEGA. Para usar em outro computador, baixe e depois traga o arquivo lá.</p>
+            <div class="barra"><button type="button" class="btn btn-primary btn-sm" data-acao="ind-exportar">⬇ Baixar meus dados (JSON)</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-acao="ind-importar">⬆ Trazer meus dados (JSON)</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-acao="ind-senha">Trocar senha</button></div>
+            <p class="muted">O arquivo traz: perfil, disciplinas e horários, rendimento, planos de ensino (conteúdo e do semestre), histórico e RAAD. A senha não vai no arquivo.</p></div>`;
+    }
+    let indImportando = false;
+    function importarIndividual(x) {
+        if (!x || x.tipo !== 'individual' || !x.nome) return aviso('Esse arquivo não é de dados individuais (exportado na Área do professor).');
+        const atual = carregarInd(x.nome) || Planos.individualVazio(x.nome);
+        Object.assign(atual, { planos: Object.assign({}, atual.planos, x.planos || {}), historico: Object.assign({}, atual.historico, x.historico || {}),
+            perfil: Object.assign({}, atual.perfil, x.perfilFuncional || {}), projetos: (x.projetos && x.projetos.length) ? x.projetos : atual.projetos,
+            avaliacoes: Object.assign({}, atual.avaliacoes, x.avaliacoes || {}) });
+        salvarInd(atual);
+        aviso(`Dados de ${esc(x.nome)} trazidos.${atual.senhaHash ? '' : ' Entre e crie sua senha.'}`, 5000);
+        renderProfessor();
+    }
+
+    // ================================================================ unidade (JSON e MEGA)
+    function unidadeImportar(u) {
+        if (!u || u.tipo !== 'unidade') return aviso('Esse arquivo não é de unidade (exportado em Curso → Unidade).');
+        guardarHistorico();
+        const r = Planos.importarUnidade(D, u);
+        mudou();
+        aviso(`Unidade ${esc((u.unidade || {}).nome || '')}: ${r.salas} sala(s) e ${r.professores} professor(es) novos; horários indisponíveis e de pesquisa somados.`, 6000);
     }
 
     // ================================================================ curso (catálogo da UFPel)
@@ -996,6 +1204,35 @@
                     break;
                 }
                 case 'exportar-json': exportarJson(); break;
+                case 'prof-sair': sairProfessor(); break;
+                case 'plano-editar': { const ind = profLogado(); if (ind) editarPlano(ind, id); break; }
+                case 'plano-docx': { const ind = profLogado(); if (ind) baixarPlanoDocx(ind, id); break; }
+                case 'raad-salvar': { const ind = profLogado(); if (ind) { salvarRaadForm(ind); aviso('RAAD salvo.'); renderProfessor(); } break; }
+                case 'raad-docx': {
+                    const ind = profLogado(); if (!ind) break;
+                    salvarRaadForm(ind);
+                    DocxDocs.raad(Planos.raad(D, ind)).then((blob) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `RAAD-${D.config.ano}-${N.sigla(ind.nome)}-pre-preenchido.docx`; document.body.appendChild(a); a.click(); a.remove(); aviso('RAAD (.docx) baixado.'); })
+                        .catch((e) => aviso('Não consegui gerar: ' + esc(e.message)));
+                    break;
+                }
+                case 'ind-exportar': { const ind = profLogado(); if (ind) { baixar(`meus-dados-${N.sigla(ind.nome)}-${D.config.ano}-${D.config.metade}.json`, JSON.stringify(Planos.exportarIndividual(D, ind), null, 2), 'application/json'); aviso('Seus dados foram baixados (só no seu computador).'); } break; }
+                case 'ind-importar': indImportando = true; modoImportar = 'individual'; $('#arquivo-entrada').click(); break;
+                case 'ind-senha': {
+                    const ind = profLogado(); if (!ind) break;
+                    abrirJanela('Trocar senha', `<div class="campos"><label class="campo"><span>Senha atual</span><input type="password" name="a" autocomplete="current-password"></label>
+                        <label class="campo"><span>Nova senha</span><input type="password" name="b" autocomplete="new-password"></label><label class="campo"><span>Repita</span><input type="password" name="c" autocomplete="new-password"></label></div>`,
+                    (dlg) => { (async () => {
+                        if (await Planos.hashSenha(val(dlg, 'a'), ind.sal) !== ind.senhaHash) return aviso('Senha atual não confere.');
+                        if (val(dlg, 'b').length < 4 || val(dlg, 'b') !== val(dlg, 'c')) return aviso('A nova senha precisa ter 4+ caracteres e conferir.');
+                        ind.senhaHash = await Planos.hashSenha(val(dlg, 'b'), ind.sal); salvarInd(ind); aviso('Senha trocada.');
+                    })(); return true; }, null, 'Trocar');
+                    break;
+                }
+                case 'unidade-exportar': baixar(`unidade-${N.sigla((D.config.unidade || {}).nome)}-${D.config.ano}-${D.config.metade}.json`, JSON.stringify(Planos.exportarUnidade(D), null, 2), 'application/json'); aviso('Dados da unidade exportados (sem dados individuais).'); break;
+                case 'unidade-importar': modoImportar = 'unidade'; $('#arquivo-entrada').click(); break;
+                case 'unidade-mega-salvar': (async () => { try { aviso('Salvando a unidade no MEGA…', 20000); const c = await Nuvem.salvarUnidade(D, Planos.exportarUnidade); aviso(`Unidade salva no MEGA:<br><small>${esc(c)}</small>`, 6000); } catch (e) { if (e.message !== 'cancelado') aviso(esc(e.message), 7000); } })(); break;
+                case 'unidade-mega-abrir': (async () => { try { aviso('Buscando a unidade no MEGA…', 20000); const u = await Nuvem.abrirUnidade(D); if (u) unidadeImportar(u); else aviso('Nenhum dado da unidade no MEGA para este período.'); } catch (e) { if (e.message !== 'cancelado') aviso(esc(e.message), 7000); } })(); break;
+                case 'verificacao-pdf': try { GeradorPDF.verificacao(D).save(`verificacao-interna-${D.config.ano}-${D.config.metade}.pdf`); aviso('Documento de verificação interna gerado.'); } catch (e) { aviso('Não consegui gerar: ' + esc(e.message)); } break;
                 case 'sair-admin': sairAdmin(); break;
                 case 'pdf-relatorios': try { GeradorPDF.relatorios(D).save(`relatorios-internos-${D.config.ano}-${D.config.metade}.pdf`); aviso('PDF dos relatórios gerado.'); } catch (e) { aviso('Não consegui gerar: ' + esc(e.message)); } break;
                 case 'cal-buscar': buscarCalendario(); break;
@@ -1039,12 +1276,15 @@
             }
             if (td && (ui.sel || ui.ins)) soltarEm(Number(td.dataset.d), Number(td.dataset.h));
         }
+        const abaP = e.target.closest('[data-aba-prof]');
+        if (abaP) { abaProf = abaP.dataset.abaProf; renderProfessor(); return; }
         const li = e.target.closest('#lista-conflitos li[data-alocs]');
         if (li) verConflito(li);
         if (e.target.closest('.sidebar-toggle')) document.body.classList.toggle('sidebar-aberta');
     });
 
     document.addEventListener('change', (e) => {
+        if (e.target.id === 'fator-preparo') { D.config.fatorPreparo = Math.max(0, Number(e.target.value) || 0); salvarLocal(); renderRelatorios(); }
         if (e.target.id === 'cur-unidade') { const u = unidadesCat().find((x) => String(x.id) === e.target.value); if (u) { D.config.unidade = { id: u.id, nome: u.nome }; salvarLocal(); renderCurso(); renderMenu(); } }
         if (e.target.id === 'visao-item') { ui.item = e.target.value; renderGradePagina(); }
         if (e.target.id === 'visao-semestre') { ui.semestre = Number(e.target.value); renderGradePagina(); }
@@ -1055,7 +1295,12 @@
             leitor.onload = () => {
                 let x = null;
                 try { x = JSON.parse(leitor.result); } catch (err) { aviso('Não consegui ler esse arquivo (precisa ser o .json exportado por este app).'); }
-                if (x) importarJson(x);
+                if (x && modoImportar === 'individual') importarIndividual(x);
+                else if (x && modoImportar === 'unidade') unidadeImportar(x);
+                else if (x && x.tipo === 'individual') importarIndividual(x);
+                else if (x && x.tipo === 'unidade') unidadeImportar(x);
+                else if (x) importarJson(x);
+                modoImportar = 'perguntar';
                 e.target.value = '';
             };
             leitor.readAsText(e.target.files[0]);

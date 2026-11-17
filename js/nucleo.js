@@ -364,7 +364,8 @@ const Nucleo = (() => {
         const e = (data, tipo, descricao, ateHora) => ({ data, tipo, descricao, ateHora: ateHora || '' });
         return {
             url: CALENDARIO_URL_2027, ano: 2027, obtidoEm: '2026-11-17', origem: 'embutido',
-            semestres: { 1: { inicio: '2027-03-08', fim: '2027-07-10' }, 2: { inicio: '2027-08-02', fim: '2027-12-04' } },
+            semestres: { 1: { inicio: '2027-03-08', fim: '2027-07-10', exames: { inicio: '2027-07-12', fim: '2027-07-17' } },
+                2: { inicio: '2027-08-02', fim: '2027-12-04', exames: { inicio: '2027-12-06', fim: '2027-12-11' } } },
             eventos: [
                 e('2027-01-01', 'feriado', 'Confraternização Universal'), e('2027-02-02', 'feriado', 'Nossa Senhora dos Navegantes'),
                 e('2027-02-08', 'recesso', 'Recesso'), e('2027-02-09', 'recesso', 'Recesso: Carnaval'),
@@ -410,6 +411,7 @@ const Nucleo = (() => {
             const sem = desc.match(/(\d{4})\/([12])/);
             if (/in[íi]cio do semestre/i.test(desc) && sem) { (cal.semestres[sem[2]] = cal.semestres[sem[2]] || {}).inicio = data; return; }
             if (/[úu]ltimo dia letivo/i.test(desc) && sem) { (cal.semestres[sem[2]] = cal.semestres[sem[2]] || {}).fim = data; return; }
+            if (/per[íi]odo de exames?|exames? (de|do)/i.test(desc) && sem) { const x = (cal.semestres[sem[2]] = cal.semestres[sem[2]] || {}); x.exames = x.exames || {}; if (/fim|t[ée]rmino|encerra/i.test(desc)) x.exames.fim = data; else { x.exames.inicio = x.exames.inicio || data; if (!x.exames.fim) x.exames.fim = data; } return; }
             let tipo = null;
             if (/recesso/i.test(desc)) tipo = 'recesso';
             else if (/ponto facultativo/i.test(desc)) tipo = 'ponto';

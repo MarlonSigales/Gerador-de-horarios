@@ -12,13 +12,15 @@ Organiza os horários dos professores nas salas de aula e nos laboratórios, **u
 6. **Outros cursos:** traga do MEGA (ou de JSON) as grades dos outros cursos do período. Professores e laboratórios já alocados por outro curso da mesma unidade ficam bloqueados; salas ficam bloqueadas para qualquer unidade. Mesma disciplina (código), mesmo professor e mesma sala = turma conjunta.
 7. **Grade:** 🎲 *Aleatorizar* monta a grade; ✏️ *Editar* mostra na hora onde há conflito. Visões por semestre, professor, sala e relação com códigos de horário (ex.: 621 622 623 624).
 8. **PDF:** grades, relação com códigos e, no fim, o calendário acadêmico vigente (feriados, dias letivos e disciplinas mais prejudicadas).
-9. **Relatórios internos (adm):** carga horária dos professores, uso das salas e laboratórios, horários de pesquisa. Login de administrador na própria interface.
+9. **Área do professor:** cada professor entra com o nome e a senha que cria no primeiro acesso; vê o rendimento (cadeiras, horas em sala, laboratório, preparo, pesquisa) contra as médias e desvios do curso e da unidade; faz os planos de ensino pré-preenchidos (DOCX no modelo do dia a dia, cronograma do calendário vigente com feriados; o conteúdo fica salvo e no próximo semestre só mudam as datas) e o RAAD do ano corrente pré-preenchido (DOCX). Dados individuais só neste navegador e por download (JSON) — nunca no MEGA.
+10. **Relatórios internos (adm):** verificação interna (médias e desvios padrões do curso e da unidade, PDF), carga horária dos professores, uso das salas e laboratórios, horários de pesquisa. Login de administrador na própria interface.
 
-**Nuvem (MEGA):** a conta é do grupo; pastas `GeradorDeHorarios/<ano>-<semestre>/<unidade>/<curso>/` (uma versão por salvamento). **JSON:** Exportar baixa só o curso; Importar abre como grade ou usa como outro curso.
+**Nuvem (MEGA):** a conta é do grupo; pastas `GeradorDeHorarios/<ano>-<semestre>/<unidade>/<curso>/` (uma versão por salvamento) e `.../<unidade>/_unidade/` (dados da unidade). **JSON:** curso (horários + relação de professores), unidade (salas, professores, cursos, calendário) e individual (só por download).
 
 ## Arquivos
 - `js/nucleo.js` — regras, conflitos, gerador, outros cursos, matriz (sem tela; testado no Node).
 - `js/app.js` — interface. `js/pdf.js` — PDF. `js/nuvem.js` — MEGA. `js/exemplo.js` — exemplo.
+- `js/planos.js` — rendimento, verificação interna, plano de ensino, RAAD, dados individuais e da unidade (sem tela). `js/docx-docs.js` — DOCX.
 - `js/matrizes.js` — catálogo UFPel (gerado de `tools/matrizes-ceng.txt` por `tools/gerar_matrizes_js.py`).
 - `tests/testes.js` — `node tests/testes.js`. `todoQA.txt` — diretrizes, feito, falta e QA.
 
