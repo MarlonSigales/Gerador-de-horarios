@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<!-- © 2026 Gerador de Horários — Marlon Sigales. Todos os direitos reservados; copiar, reproduzir ou alterar exige autorização do autor (ver LICENSE). -->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Horários</title>
+    <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
+    <link rel="icon" type="image/png" href="img/icone-instagri.png">
+    <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
+    <link rel="stylesheet" href="css/style.css?v=20261116b">
+</head>
+<body>
+    <header class="topbar">
+        <button type="button" class="sidebar-toggle" aria-label="Abrir o menu" aria-expanded="false"></button>
+        <a href="#inicio" class="topbar-marca" title="Início">
+            <img src="img/logos/lia.png" alt="" height="36">
+            <span>Gerador de Horários</span>
+        </a>
+        <span class="topbar-projeto" id="topbar-projeto">Engenharia Agrícola · CEng/UFPel</span>
+        <a href="#grade" class="topbar-selo" id="topbar-selo" title="Situação da grade"></a>
+    </header>
+
+    <div class="app-corpo">
+        <aside class="sidebar" id="sidebar">
+            <nav id="sidebar-nav" aria-label="Etapas"></nav>
+            <div class="sidebar-arquivo">
+                <span class="sidebar-arquivo-rotulo">Arquivo</span>
+                <button type="button" class="sidebar-arquivo-btn" data-acao="salvar-arquivo" title="Baixa um arquivo .json com cadastros e grade">💾 Salvar arquivo</button>
+                <div class="sidebar-arquivo-linha">
+                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="abrir-arquivo" title="Abre um arquivo .json salvo antes">📂 Abrir</button>
+                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="novo" title="Começa do zero">🗋 Novo</button>
+                </div>
+                <button type="button" class="sidebar-arquivo-btn secundario" data-acao="exemplo" title="Carrega o exemplo pronto">📘 Carregar exemplo</button>
+                <input type="file" id="arquivo-entrada" accept=".json,application/json" hidden>
+            </div>
+        </aside>
+        <div class="sidebar-fundo" data-acao="fechar-menu"></div>
+
+        <div class="app-conteudo">
+            <main class="main-content" id="app" tabindex="-1">
+                <div class="container">
+
+                    <section class="pagina" id="p-inicio" data-titulo="Início">
+                        <div class="card card-intro">
+                            <h1>Gerador de Horários</h1>
+                            <p>Organiza os horários dos professores nas salas de aula e nos laboratórios. Você cadastra os cursos, os
+                                professores, as salas e as disciplinas com as restrições de cada um; clica em <b>Aleatorizar</b> e o
+                                sistema monta uma grade que respeita as regras. Depois, em <b>Editar</b>, você muda o que quiser:
+                                o sistema mostra na hora onde há conflito. No fim, gere o <b>PDF</b>.</p>
+                            <p class="muted">Tudo fica só neste navegador (salvo automaticamente). Use “Salvar arquivo” para guardar uma cópia ou passar para outra pessoa.</p>
+                        </div>
+                        <div class="card">
+                            <div class="card-topo"><h2>Passo a passo</h2><small id="inicio-resumo"></small></div>
+                            <ol class="passos" id="passos"></ol>
+                        </div>
+                        <div class="card">
+                            <h2>Regras que o sistema respeita</h2>
+                            <ul>
+                                <li>Professor e sala/laboratório não têm duas aulas ao mesmo tempo, a não ser que as disciplinas sejam <b>equivalentes</b> (viram uma turma só).</li>
+                                <li>Horários proibidos de cada professor e de cada sala/laboratório, e horários fixos de cada disciplina.</li>
+                                <li>Cada curso tem seu número de semestres e seus horários de funcionamento para <b>ofertas</b> e para <b>reofertas</b>.
+                                    Na metade 1 do ano os semestres ímpares são oferta e os pares são reoferta; na metade 2, o contrário.</li>
+                                <li>Uma disciplina pode servir a vários cursos, com caráter obrigatório, optativo ou livre em cada um. No mesmo semestre de um curso não há duas aulas no mesmo horário.</li>
+                                <li>Os responsáveis por um laboratório têm prioridade nele e decidem se aceitam aulas de outros professores.</li>
+                            </ul>
+                        </div>
+                    </section>
+
+                    <section class="pagina" id="p-config" data-titulo="Configuração" hidden>
+                        <div class="card">
+                            <h2>Período, dias e horários</h2>
+                            <div class="campos">
+                                <label class="campo"><span>Título da grade</span><input type="text" id="cfg-titulo"></label>
+                                <label class="campo"><span>Ano</span><input type="number" id="cfg-ano" min="2000" max="2100"></label>
+                                <label class="campo"><span>Metade do ano</span>
+                                    <select id="cfg-metade"><option value="1">1ª metade (semestres ímpares = oferta)</option><option value="2">2ª metade (semestres pares = oferta)</option></select>
+                                </label>
+                            </div>
+                            <fieldset><legend>Dias de aula</legend><div class="checks" id="cfg-dias"></div></fieldset>
+                            <fieldset><legend>Horários das aulas (um por linha, início-fim)</legend>
+                                <textarea id="cfg-horarios" rows="10" spellcheck="false"></textarea>
+                                <small>Exemplo: 07:30-08:20. Aulas com até 20 min de intervalo contam como seguidas (podem formar um bloco). O turno vem do início: manhã antes das 12h, tarde antes das 18h, noite depois.</small>
+                                <div class="barra" style="margin-top:.5rem"><button type="button" class="btn btn-secondary btn-sm" data-acao="horarios-padrao">Usar horários padrão (50 min)</button></div>
+                            </fieldset>
+                            <div class="barra"><button type="button" class="btn btn-primary" data-acao="salvar-config">Salvar configuração</button><small class="muted">Mudar dias ou horários mantém o que já foi marcado nos horários que continuam existindo.</small></div>
+                        </div>
+                    </section>
+
+                    <section class="pagina" id="p-cursos" data-titulo="Cursos" hidden>
+                        <div class="card">
+                            <div class="card-topo"><h2>Cursos</h2><button type="button" class="btn btn-primary btn-sm" data-acao="novo-item" data-tipo="curso">+ Novo curso</button></div>
+                            <p class="muted">Cada curso tem o número de semestres e os horários de funcionamento para as ofertas e para as reofertas.</p>
+                            <div class="tabela-wrap" id="lista-curso"></div>
+                        </div>
+                    </section>
+
+                    <section class="pagina" id="p-professores" data-titulo="Professores" hidden>
+                        <div class="card">
+                            <div class="card-topo"><h2>Professores</h2><button type="button" class="btn btn-primary btn-sm" data-acao="novo-item" data-tipo="professor">+ Novo professor</button></div>
+                            <p class="muted">Marque os horários em que cada professor não pode dar aula.</p>
+                            <div class="tabela-wrap" id="lista-professor"></div>
+                        </div>
+                    </section>
+
+                    <section class="pagina" id="p-salas" data-titulo="Salas e laboratórios" hidden>
+                        <div class="card">
+                            <div class="card-topo"><h2>Salas e laboratórios</h2><button type="button" class="btn btn-primary btn-sm" data-acao="novo-item" data-tipo="sala">+ Nova sala ou laboratório</button></div>
+                            <p class="muted">Os responsáveis por um laboratório têm prioridade nele e decidem se aceitam aulas de outros professores.</p>
+                            <div class="tabela-wrap" id="lista-sala"></div>
+                        </div>
+                    </section>
+
+                    <section class="pagina" id="p-disciplinas" data-titulo="Disciplinas" hidden>
+                        <div class="card">
+                            <div class="card-topo"><h2>Disciplinas (cadeiras)</h2><button type="button" class="btn btn-primary btn-sm" data-acao="novo-item" data-tipo="disciplina">+ Nova disciplina</button></div>
+                            <p class="muted">Cada disciplina tem um professor responsável e pode servir a vários cursos (obrigatória, optativa ou livre em cada um).</p>
+                            <div class="campos" style="max-width:640px"><label class="campo"><span>Filtrar</span><input type="text" id="filtro-disc" placeholder="código, nome, professor ou curso"></label></div>
+                            <div class="tabela-wrap" id="lista-disciplina"></div>
+                        </div>
+                    </section>
+
+                    <section class="pagina" id="p-grade" data-titulo="Grade" hidden>
+                        <div class="card">
+                            <div class="card-topo"><h2>Grade horária</h2><div class="resumo" id="grade-resumo"></div></div>
+                            <div class="barra">
+                                <button type="button" class="btn btn-primary" data-acao="aleatorizar" title="Monta a grade a partir das regras (mantém as aulas travadas 🔒)">🎲 Aleatorizar</button>
+                                <button type="button" class="btn btn-secondary" data-acao="editar" id="btn-editar" title="Mudar o que foi gerado">✏️ Editar</button>
+                                <button type="button" class="btn btn-secondary" data-acao="desfazer" id="btn-desfazer" title="Desfaz a última mudança na grade">↶ Desfazer</button>
+                                <button type="button" class="btn btn-secondary" data-acao="destravar-tudo" title="Tira a trava de todas as aulas">🔓 Destravar tudo</button>
+                                <button type="button" class="btn btn-perigo" data-acao="limpar-grade">Limpar grade</button>
+                            </div>
+                            <div id="painel-edicao"></div>
+                            <div class="visao">
+                                <div class="abas" role="tablist" id="visao-abas">
+                                    <button type="button" data-visao="curso">Curso e semestre</button>
+                                    <button type="button" data-visao="professor">Professor</button>
+                                    <button type="button" data-visao="sala">Sala ou laboratório</button>
+                                </div>
+                                <label class="campo"><span id="visao-rotulo">Curso</span><select id="visao-item"></select></label>
+                                <label class="campo" id="visao-sem-campo"><span>Semestre</span><select id="visao-semestre"></select></label>
+                            </div>
+                            <div class="grade-wrap" id="grade-wrap"></div>
+                            <div class="legenda" id="legenda"></div>
+                        </div>
+                        <div class="duas-colunas">
+                            <div class="card">
+                                <div class="card-topo"><h2>Conflitos</h2><small id="conflitos-conta"></small></div>
+                                <ul class="lista-conflitos" id="lista-conflitos"></ul>
+                            </div>
+                            <div class="card">
+                                <div class="card-topo"><h2>Aulas sem lugar</h2><small id="faltam-conta"></small></div>
+                                <div id="lista-faltam"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="pagina" id="p-pdf" data-titulo="PDF" hidden>
+                        <div class="card">
+                            <h2>Gerar PDF</h2>
+                            <p>O PDF sai em A4 deitado, com uma página por grade e os logos no topo. Escolha o que entra:</p>
+                            <fieldset><legend>Conteúdo</legend>
+                                <div class="checks" style="flex-direction:column">
+                                    <label><input type="checkbox" id="pdf-capa" checked> Capa com o resumo (período, cursos, ofertas e reofertas)</label>
+                                    <label><input type="checkbox" id="pdf-curso" checked> Grade de cada curso e semestre (ofertas e reofertas)</label>
+                                    <label><input type="checkbox" id="pdf-professor" checked> Grade de cada professor</label>
+                                    <label><input type="checkbox" id="pdf-sala" checked> Grade de cada sala e laboratório</label>
+                                    <label><input type="checkbox" id="pdf-disciplinas" checked> Lista das disciplinas (professor responsável, cursos, salas)</label>
+                                    <label><input type="checkbox" id="pdf-conflitos" checked> Conflitos e aulas sem lugar</label>
+                                    <label><input type="checkbox" id="pdf-vazios"> Incluir semestres, professores e salas sem aula</label>
+                                </div>
+                            </fieldset>
+                            <div class="barra"><button type="button" class="btn btn-primary" data-acao="gerar-pdf">📄 Gerar PDF</button><small class="muted" id="pdf-info"></small></div>
+                        </div>
+                    </section>
+
+                </div>
+            </main>
+
+            <footer class="footer">
+                <div class="container">
+                    <div class="footer-logos">
+                        <img src="img/logos/ufpel.png" alt="Universidade Federal de Pelotas" height="64">
+                        <img src="img/logos/ceng.png" alt="Centro de Engenharias - UFPel" height="64">
+                        <img src="img/logos/ea.png" alt="Engenharia Agrícola - UFPel" height="64">
+                        <img src="img/logos/lia.png" alt="Laboratório de Instrumentação Agrícola - UFPel" height="64">
+                    </div>
+                    <p>&copy; 2026 Gerador de Horários</p>
+                    <p class="footer-credits"><strong>Desenvolvedor:</strong> Marlon Soares Sigales<br>
+                        Laboratório de Instrumentação Agrícola · Engenharia Agrícola · Centro de Engenharias · UFPel</p>
+                    <p class="footer-credits">© 2026 Marlon Sigales. Todos os direitos reservados: copiar, reproduzir ou alterar o código exige autorização do autor.</p>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <dialog class="janela" id="janela"></dialog>
+    <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
+
+    <script src="js/nucleo.js?v=20261116b"></script>
+    <script src="js/exemplo.js?v=20261116b"></script>
+    <script src="js/logos.js?v=20261116b"></script>
+    <script src="js/vendor/jspdf.umd.min.js"></script>
+    <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
+    <script src="js/pdf.js?v=20261116b"></script>
+    <script src="js/app.js?v=20261116b"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+© 2026 Gerador de Horários — Marlon Sigales. Todos os direitos reservados; copiar, reproduzir ou alterar exige autorização do autor (ver LICENSE).
+
+TODO / QA — Gerador de Horários
+Marcadores: [fazer] [futuro] [resolvido] [rejeitado]
+Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referência).
+
+=== DIRETRIZES PERMANENTES
+- Mesma identidade visual dos outros apps (cores, topo, menu lateral verde-petróleo, rodapé).
+- Logos: UFPel, Centro de Engenharias, Engenharia Agrícola e Laboratório de Instrumentação Agrícola (na página e no PDF).
+  NÃO usar os logos da EMBRAPII / Inova Agro neste app.
+- Regras e gerador só em js/nucleo.js (sem tela), sempre cobertos por tests/testes.js.
+- Dados só no navegador (localStorage, com try/catch) e no arquivo .json que o usuário baixa. Nada vai para servidor.
+- Todo arquivo novo começa com a linha de direitos autorais. Sem CDN (jsPDF local em js/vendor). Trocar o ?v= ao publicar.
+- Testar em 360, 768, 1024 e 1920 px: nada sai da tela. Rodar node tests/testes.js antes de publicar.
+
+=== O QUE FOI FEITO
+1 [resolvido 16/11/2026] Cadastros: configuração (ano, metade, dias, horários), cursos, professores, salas/laboratórios e disciplinas.
+2 [resolvido 16/11/2026] Restrições: sala/lab proibida em horários; professor proibido em horários; disciplina com horários fixos
+  (aula z no lab x com o professor y só em tal horário).
+3 [resolvido 16/11/2026] Disciplina em vários cursos, com caráter obrigatório, optativo ou livre em cada um.
+4 [resolvido 16/11/2026] Professor e laboratório sem duas aulas ao mesmo tempo, exceto disciplinas equivalentes (turma única).
+5 [resolvido 16/11/2026] Ofertas e reofertas: metade 1 = semestres ímpares oferta / pares reoferta; metade 2 = o contrário.
+  Cada curso com número de semestres e horários próprios de oferta e de reoferta.
+6 [resolvido 16/11/2026] Professor responsável por disciplina; responsáveis por laboratório com prioridade (vão primeiro no
+  gerador e preferem o próprio lab; o conflito de sala diz quem tem prioridade) e decidem se aceitam outros professores
+  (todos / só autorizados / só responsáveis).
+7 [resolvido 16/11/2026] 🎲 Aleatorizar: várias tentativas, fica com a melhor; mantém as aulas travadas; explica por que uma
+  aula ficou sem lugar (ex.: cursos sem horário em comum).
+8 [resolvido 16/11/2026] ✏️ Editar: clicar (ou arrastar) a aula e a célula de destino; as células ficam verdes, amarelas ou
+  vermelhas com o motivo; depois de mover, os conflitos piscam na grade, aparecem no aviso e no topo da lista.
+  Aula movida fica travada. Trocar sala, tirar da grade, colocar aulas que faltam, desfazer (Ctrl+Z).
+9 [resolvido 16/11/2026] Grade vista por curso e semestre, por professor e por sala; clicar num conflito leva à grade certa.
+10 [resolvido 16/11/2026] PDF (A4 deitado): capa, grade de cada curso/semestre, professor e sala, lista de disciplinas,
+   conflitos e aulas sem lugar; logos no topo; conflitos em vermelho com (!).
+11 [resolvido 16/11/2026] Logos UFPel, CEng, Engenharia Agrícola e Laboratório; sem EMBRAPII/Inova Agro.
+12 [resolvido 16/11/2026] Regra: no mesmo semestre de um curso não pode haver duas aulas no mesmo horário (qualquer caráter):
+   regra rígida no gerador e conflito (erro) na edição.
+13 [resolvido 16/11/2026] Arquivo: salvar/abrir .json, novo, carregar exemplo; mudar dias/horários mantém o que continua existindo.
+
+=== O QUE FALTA
+14 [fazer] A mensagem do pedido foi cortada em "gere um pdf com ...": confirmar com o usuário o conteúdo do PDF (hoje: item 10).
+15 [fazer] Testar com os dados reais do curso (cursos, professores, salas e disciplinas da UFPel).
+16 [fazer] Ativar o GitHub Pages do repositório (Settings → Pages → main, / root), se ainda não estiver ativo.
+17 [futuro] Capacidade da sala × número de alunos da turma (hoje a capacidade é só informativa).
+18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
+
+=== QA (16/11/2026)
+- node tests/testes.js: 18 de 18 passaram (inclui gerar o PDF no Node).
+- Gerador: exemplo (3 cursos, 7 professores, 7 salas, 19 disciplinas, 66 aulas) sem aula sem lugar e sem conflito em 20 sementes.
+- Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript em todas as páginas;
+  aleatorizar, editar (tirar e recolocar aula), criar sala pelo formulário e baixar o PDF (41 páginas) funcionaram.

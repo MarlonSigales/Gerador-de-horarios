@@ -1,0 +1,17 @@
+Copyright (c) 2026 Marlon Sigales
+Todos os direitos reservados.
+
+Este software (código-fonte, folhas de estilo, páginas, figuras e documentação deste repositório) é de propriedade do
+autor. O código está publicado para consulta e uso do aplicativo por meio do site; nenhuma licença é concedida além disso.
+Sem autorização prévia e por escrito do autor, é proibido copiar, reproduzir, modificar, distribuir, sublicenciar ou
+criar obras derivadas, no todo ou em parte.
+
+Exceções (componentes de terceiros, com licença própria, mantida nos arquivos):
+- js/vendor/jspdf.umd.min.js — jsPDF 2.5, licença MIT (js/vendor/LICENSE-jspdf.txt).
+- js/vendor/jspdf.plugin.autotable.min.js — jsPDF-AutoTable 3.8, licença MIT (js/vendor/LICENSE-jspdf-autotable.txt).
+Os logotipos da UFPel, do Centro de Engenharias, da Engenharia Agrícola e do Laboratório de Instrumentação Agrícola
+pertencem às respectivas instituições.
+
+O SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA", SEM GARANTIAS DE QUALQUER TIPO.
+
+Pedidos de autorização: Marlon Sigales.
