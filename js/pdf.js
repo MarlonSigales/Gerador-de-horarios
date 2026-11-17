@@ -113,13 +113,19 @@ const GeradorPDF = (() => {
             doc.text(txt(`Dias: ${cfg.dias.join(', ')}. Horários: ${cfg.horarios[0].ini} às ${cfg.horarios[cfg.horarios.length - 1].fim} (${cfg.horarios.length} aulas por dia).`), 10, 58);
             doc.autoTable({
                 startY: 64, margin: { left: 10, right: 10 },
-                head: [['Curso', 'Sigla', 'Semestres', 'Disciplinas', 'Ofertas (semestres)', 'Reofertas (semestres)']],
+                head: [['Curso', 'Unidade', 'Semestres', 'Disciplinas na grade', 'Ofertas (semestres)', 'Reofertas (semestres)']],
                 body: D.cursos.map((cu) => {
                     const sems = Array.from({ length: cu.semestres }, (_, i) => i + 1);
-                    return [cu.nome, N.sigla(cu.nome), cu.semestres, D.disciplinas.filter((q) => q.ofertas.some((o) => o.curso === cu.id)).length,
+                    return [cu.nome, (cfg.unidade || {}).nome || '', cu.semestres, D.disciplinas.filter((q) => q.aulas > 0 && q.ofertas.some((o) => o.curso === cu.id && o.semestre > 0)).length,
                         sems.filter((s) => N.situacao(s, cfg.metade) === 'oferta').join(', '), sems.filter((s) => N.situacao(s, cfg.metade) === 'reoferta').join(', ')].map(txt);
                 }),
                 theme: 'grid', headStyles: { fillColor: VERDE }, styles: { fontSize: 9 }
+            });
+            if ((D.externos || []).length) doc.autoTable({
+                startY: doc.lastAutoTable.finalY + 6, margin: { left: 10, right: 10 },
+                head: [['Outros cursos considerados (bloqueios)', 'Unidade', 'Aulas', 'Origem']],
+                body: D.externos.map((e) => [e.curso, e.unidade || '—', e.aulas.length, e.origem].map(txt)),
+                theme: 'grid', headStyles: { fillColor: VERDE }, styles: { fontSize: 8.5 }
             });
             doc.autoTable({
                 startY: doc.lastAutoTable.finalY + 6, margin: { left: 10, right: 10 },
@@ -169,7 +175,7 @@ const GeradorPDF = (() => {
         if (op.relacao !== false && D.disciplinas.length) {
             const explica = 'Código do horário = dia + turno + período. Dia: dom 1, seg 2, ter 3, qua 4, qui 5, sex 6, sáb 7. Turno: manhã 1, tarde 2, noite 3. Ex.: 611 = sexta, manhã, 1º período; 621 622 623 624 = sexta à tarde, 4 períodos.';
             D.cursos.forEach((cu) => {
-                const linhas = N.relacao(D, cu.id);
+                const linhas = N.relacao(D, cu.id).filter((l) => l.aulas > 0 && l.semestre > 0);
                 if (!linhas.length) return;
                 novaPagina();
                 cabecalho(`Relação de disciplinas e professores — ${cu.nome}`, `${cfg.titulo} — ${periodo}`);

@@ -14,7 +14,8 @@ const TESTES = [];
 const teste = (nome, f) => TESTES.push({ nome, f });
 const ok = (c, msg) => { if (!c) throw new Error(msg || 'condição falsa'); };
 const igual = (a, b, msg) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg || ''} esperado ${JSON.stringify(b)}, veio ${JSON.stringify(a)}`); };
-const exemplo = () => E.criar(N);
+const exemplo = () => E.criarCompleto(N); // regras gerais: arquivo com 3 cursos
+const exemploUm = () => E.criar(N); // como o app usa: 1 curso + outros cursos
 const comGrade = (semente = 1) => { const d = exemplo(); const r = N.gerar(d, { semente }); d.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 'teste' }; return d; };
 const tipos = (d) => N.conflitos(d).lista.map((c) => c.tipo);
 
@@ -183,6 +184,135 @@ teste('Códigos de horário UFPel: 611, 222 e sexta à tarde 621 622 623 624', (
     igual([rel.semestre, rel.professor, rel.horarios, rel.salas], [8, 'Bruno Costa (exemplo)', '621 622 623 624', 'Sala 101']);
 });
 
+teste('Um curso por grade: exemplo tem 1 curso e 2 outros cursos; gera sem conflito em 20 sementes', () => {
+    const d0 = exemploUm();
+    igual(d0.cursos.length, 1);
+    igual(d0.externos.map((e) => e.curso), ['Engenharia de Controle e Automação', 'Engenharia Civil']);
+    for (let s = 1; s <= 20; s++) {
+        const d = exemploUm(); const r = N.gerar(d, { semente: s });
+        d.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+        igual(r.naoAlocadas.length, 0, `semente ${s}`);
+        igual(N.conflitos(d).lista.map((x) => x.msg), [], `semente ${s}`);
+    }
+});
+
+teste('Outros cursos: professor já alocado por outro curso no mesmo horário = conflito', () => {
+    const d = exemploUm();
+    const au = d.externos[0].aulas.find((a) => a.codigo === 'ECA030'); // Circuitos, Diego
+    const dd = d.config.dias.indexOf(au.dia), h = d.config.horarios.findIndex((x) => x.ini === au.ini);
+    d.grade.alocacoes = [{ disc: 'empr', d: dd, h, sala: 's201' }]; // Empreendedorismo, também do Diego
+    const c = N.conflitos(d).lista.find((x) => x.tipo === 'externo-prof');
+    ok(c && /Diego Rocha \(exemplo\) já tem aula em Engenharia de Controle e Automação/.test(c.msg), c && c.msg);
+});
+
+teste('Outros cursos: laboratório já ocupado por outro curso = conflito', () => {
+    const d = exemploUm();
+    const au = d.externos[0].aulas.find((a) => a.codigo === 'ECA010'); // Lab. de Informática
+    const dd = d.config.dias.indexOf(au.dia), h = d.config.horarios.findIndex((x) => x.ini === au.ini);
+    d.grade.alocacoes = [{ disc: 'instr', d: dd, h, sala: 'linfo' }];
+    ok(N.conflitos(d).lista.some((x) => x.tipo === 'externo-sala'));
+});
+
+teste('Outros cursos: mesma disciplina (código) na mesma sala = turma conjunta, sem conflito; o gerador prefere juntar', () => {
+    const d = exemploUm();
+    const au = d.externos[0].aulas.find((a) => a.codigo === 'MAT001');
+    const dd = d.config.dias.indexOf(au.dia), h = d.config.horarios.findIndex((x) => x.ini === au.ini);
+    const sala = d.salas.find((x) => x.nome === au.sala).id;
+    d.grade.alocacoes = [{ disc: 'calc1', d: dd, h, sala }];
+    ok(!N.conflitos(d).lista.some((x) => /externo/.test(x.tipo)), 'conjunta não é conflito');
+    d.grade.alocacoes = [{ disc: 'calc1', d: dd, h, sala: d.salas.find((x) => x.nome !== au.sala && x.tipo === 'sala').id }];
+    ok(N.conflitos(d).lista.some((x) => x.tipo === 'externo-prof'), 'outra sala: professor em dois lugares');
+    const r = N.gerar(exemploUm(), { semente: 3 });
+    const meus = r.alocacoes.filter((a) => a.disc === 'calc1').map((a) => `${d.config.dias[a.d]} ${d.config.horarios[a.h].ini}`).sort();
+    const deles = d.externos[0].aulas.filter((a) => a.codigo === 'MAT001').map((a) => `${a.dia} ${a.ini}`).sort();
+    igual(meus, deles);
+});
+
+teste('Outros cursos: separar um curso de um arquivo com vários e recusar período diferente', () => {
+    const todos = exemplo();
+    const so = N.separarCurso(todos, 'ecivil');
+    igual(so.cursos.map((c) => c.id), ['ecivil']);
+    ok(so.disciplinas.every((q) => q.ofertas.every((o) => o.curso === 'ecivil')));
+    const d = exemploUm();
+    const ext = N.externoDe(so, 'ecivil', 'arquivo'); ext.ano = 1999;
+    ok(!N.incluirExterno(d, ext).ok);
+    const proprio = N.externoDe(N.separarCurso(todos, 'eagri'), 'eagri');
+    ok(!N.incluirExterno(d, proprio).ok, 'o próprio curso não entra');
+});
+
+teste('Unidade: outro curso de OUTRA unidade só bloqueia salas, não professores', () => {
+    const d = exemploUm();
+    const au = d.externos[0].aulas.find((a) => a.codigo === 'ECA030');
+    const dd = d.config.dias.indexOf(au.dia), h = d.config.horarios.findIndex((x) => x.ini === au.ini);
+    d.grade.alocacoes = [{ disc: 'empr', d: dd, h, sala: d.salas.find((x) => x.nome === au.sala).id }];
+    ok(N.conflitos(d).lista.some((x) => x.tipo === 'externo-prof') && N.conflitos(d).lista.some((x) => x.tipo === 'externo-sala'));
+    d.externos[0].unidade = 'Centro de Ciências Químicas';
+    const t = N.conflitos(d).lista.map((x) => x.tipo);
+    ok(!t.includes('externo-prof'), 'outra unidade não bloqueia professor');
+    ok(t.includes('externo-sala'), 'mas a sala continua bloqueada');
+});
+
+teste('Turno preferido por semestre: o gerador respeita quando dá e avisa quando não dá', () => {
+    const d = exemploUm();
+    d.cursos[0].preferencias = { 1: ['manha'], 3: ['manha'], 5: ['tarde'], 7: ['tarde'] };
+    const r = N.gerar(d, { semente: 4 });
+    d.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+    const fora = N.conflitos(d).lista.filter((x) => x.tipo === 'turno-pref');
+    const total = r.alocacoes.filter((a) => d.disciplinas.find((q) => q.id === a.disc).ofertas.some((o) => [1, 3, 5, 7].includes(o.semestre))).length;
+    ok(fora.length < total / 4, `muitas fora do turno: ${fora.length} de ${total}`);
+    d.grade.alocacoes = [{ disc: 'calc1', d: 1, h: 6, sala: 's101' }];
+    ok(N.conflitos(d).lista.some((x) => x.tipo === 'turno-pref' && x.gravidade === 'aviso'));
+});
+
+teste('Matriz curricular: 9 engenharias do CEng; importar Eng. Agrícola (obrigatórias com aula; estágio, TCC, EAD e optativas com 0)', () => {
+    const C = require('../js/matrizes.js');
+    const u = C.unidades[0];
+    igual([u.id, u.nome], [444, 'Centro de Engenharias']);
+    const eng = u.cursos.filter((c) => c.matriz);
+    igual(eng.length, 9);
+    eng.forEach((c) => igual(Math.max(...c.matriz.map((m) => m.sem)), 10, c.nome));
+    const ea = u.cursos.find((c) => c.cod === 700);
+    const ds = N.disciplinasDaMatriz(ea, 'c1', []);
+    igual(ds.length, 105);
+    const calc = ds.find((q) => q.codigo === '15000768');
+    igual([calc.nome, calc.aulas, calc.ofertas[0].semestre], ['Cálculo A', 6, 1]);
+    igual(ds.find((q) => q.codigo === '15000893').aulas, 0, 'estágio');
+    const opt = ds.find((q) => q.codigo === '15000907');
+    igual([opt.aulas, opt.ofertas[0].semestre, opt.ofertas[0].carater], [0, 0, 'optativa']);
+    igual(N.disciplinasDaMatriz(ea, 'c1', ds).length, 0, 'não repete');
+});
+
+teste('Exportar: só o curso, sem as grades dos outros cursos', () => {
+    const d = exemploUm();
+    const e = N.exportarCurso(d);
+    igual([e.cursos.length, e.externos.length], [1, 0]);
+    igual(d.externos.length, 2, 'o original não muda');
+});
+
+teste('MEGA (simulado): salvar versões, listar e trazer os outros cursos do período', async () => {
+    const Nuvem = require('../js/nuvem.js');
+    const arq = (name, bytes, ts) => ({ name, directory: false, timestamp: ts, downloadBuffer: async () => bytes });
+    let relogio = 1000;
+    const pasta = (name) => ({ name, directory: true, children: [], async mkdir(n) { const p = pasta(n); this.children.push(p); return p; },
+        upload(meta, bytes) { this.children.push(arq(meta.name, bytes, relogio++)); return { complete: Promise.resolve() }; } });
+    const raiz = pasta('root');
+    Nuvem.estado.simulado = { Storage: function () { this.ready = Promise.resolve(); this.root = raiz; } };
+    global.localStorage = { setItem() {}, getItem() { return ''; } };
+    await Nuvem.entrar('grupo@exemplo', 'x');
+    const todos = exemplo();
+    const r = N.gerar(todos, { semente: 2 }); todos.grade.alocacoes = r.alocacoes;
+    for (const c of ['ecaut', 'ecivil', 'eagri']) await Nuvem.salvar(N.separarCurso(todos, c), N.exportarCurso);
+    await Nuvem.salvar(N.separarCurso(todos, 'eagri'), N.exportarCurso); // segunda versão
+    const lista = await Nuvem.listar(exemploUm());
+    igual(lista.map((x) => x.curso).sort(), ['Engenharia Agricola', 'Engenharia Civil', 'Engenharia de Controle e Automacao']);
+    igual(lista.find((x) => x.curso === 'Engenharia Agricola').versoes.length, 2);
+    const meu = N.separarCurso(todos, 'eagri'); meu.externos = [];
+    const outros = await Nuvem.outrosCursos(meu);
+    igual(outros.map((x) => N.normalizar(x.dados).cursos[0].nome).sort(), ['Engenharia Civil', 'Engenharia de Controle e Automação']);
+    ok(lista[0].versoes[0].name.startsWith(lista[0].curso));
+    Nuvem.estado.simulado = null;
+});
+
 teste('Arquivo: normalizar completa campos faltando', () => {
     const d = N.normalizar({ cursos: [{ nome: 'X' }], disciplinas: [{ nome: 'Y', ofertas: [{ curso: 'c', semestre: '3' }] }] });
     igual(d.cursos[0].semestres, 10);
@@ -207,9 +337,11 @@ teste('PDF: gera com o exemplo (capa, grades, disciplinas, conflitos)', () => {
     igual(PDF.txt('⚠ Lab 🔒'), '(!) Lab');
 });
 
-let falhas = 0;
-TESTES.forEach((t) => {
-    try { t.f(); console.log(`  ok  ${t.nome}`); } catch (e) { falhas++; console.log(`FALHOU ${t.nome}\n      ${e.message}`); }
-});
-console.log(`\n${TESTES.length - falhas} de ${TESTES.length} passaram.`);
-process.exit(falhas ? 1 : 0);
+(async () => {
+    let falhas = 0;
+    for (const t of TESTES) {
+        try { await t.f(); console.log(`  ok  ${t.nome}`); } catch (e) { falhas++; console.log(`FALHOU ${t.nome}\n      ${e.message}`); }
+    }
+    console.log(`\n${TESTES.length - falhas} de ${TESTES.length} passaram.`);
+    process.exit(falhas ? 1 : 0);
+})();

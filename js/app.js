@@ -7,7 +7,7 @@
 
 'use strict';
 
-/* global Nucleo, Exemplo, GeradorPDF */
+/* global Nucleo, Exemplo, GeradorPDF, Nuvem, CATALOGO_UFPEL */
 (() => {
     const N = Nucleo;
     const CHAVE_LOCAL = 'gerador-horarios-v1';
@@ -21,7 +21,17 @@
 
     // ================================================================ armazenamento
     function carregarLocal() {
-        try { const t = localStorage.getItem(CHAVE_LOCAL); if (t) return N.normalizar(JSON.parse(t)); } catch (e) { /* sem armazenamento */ }
+        try {
+            const t = localStorage.getItem(CHAVE_LOCAL);
+            if (t) {
+                let d = N.normalizar(JSON.parse(t));
+                if (d.cursos.length > 1) { // versão antiga, com vários cursos: fica o primeiro; os outros viram bloqueios
+                    const todos = d; d = N.separarCurso(todos, todos.cursos[0].id);
+                    todos.cursos.slice(1).forEach((c) => N.incluirExterno(d, N.externoDe(N.separarCurso(todos, c.id), c.id, 'arquivo')));
+                }
+                return d;
+            }
+        } catch (e) { /* sem armazenamento */ }
         return Exemplo.criar(N);
     }
     function salvarLocal() { try { localStorage.setItem(CHAVE_LOCAL, JSON.stringify(D)); } catch (e) { /* cheio ou bloqueado */ } }
@@ -38,16 +48,18 @@
     const PAGINAS = [
         { id: 'inicio', titulo: 'Início', icone: '🏠' },
         { id: 'config', titulo: 'Configuração', num: 1, conta: () => `${D.config.ano}/${D.config.metade}` },
-        { id: 'cursos', titulo: 'Cursos', num: 2, conta: () => D.cursos.length },
+        { id: 'cursos', titulo: 'Curso', num: 2, conta: () => (D.cursos[0] ? N.sigla(D.cursos[0].nome) : '') },
         { id: 'professores', titulo: 'Professores', num: 3, conta: () => D.professores.length },
         { id: 'salas', titulo: 'Salas e laboratórios', num: 4, conta: () => D.salas.length },
         { id: 'disciplinas', titulo: 'Disciplinas', num: 5, conta: () => D.disciplinas.length },
-        { id: 'grade', titulo: 'Grade', num: 6, conta: () => { const c = N.conflitos(D); return c.erros ? { t: `⚠ ${c.erros}`, ruim: true } : (D.grade.alocacoes.length ? '✓' : ''); } },
-        { id: 'pdf', titulo: 'PDF', num: 7 }
+        { id: 'outros', titulo: 'Outros cursos', num: 6, conta: () => (D.externos || []).length },
+        { id: 'grade', titulo: 'Grade', num: 7, conta: () => { const c = N.conflitos(D); return c.erros ? { t: `⚠ ${c.erros}`, ruim: true } : (D.grade.alocacoes.length ? '✓' : ''); } },
+        { id: 'pdf', titulo: 'PDF', num: 8 }
     ];
     const DESCR = {
         config: 'Ano, semestre do ano, dias e horários das aulas.',
-        cursos: 'Semestres e horários de oferta e de reoferta.',
+        cursos: 'O curso (catálogo da UFPel), matriz, horários e turnos preferidos.',
+        outros: 'Grades dos outros cursos: bloqueiam professores e salas.',
         professores: 'Quem dá aula e quando não pode.',
         salas: 'Salas comuns e laboratórios com responsáveis.',
         disciplinas: 'Professor, aulas, cursos, salas e horários fixos.',
@@ -66,8 +78,8 @@
         const selo = $('#topbar-selo');
         selo.textContent = !D.grade.alocacoes.length ? 'grade vazia' : (c.erros ? `⚠ ${c.erros} conflito${c.erros > 1 ? 's' : ''}` : '✓ sem conflitos');
         selo.style.color = c.erros ? 'var(--perigo)' : '';
-        $('#topbar-projeto').textContent = `${D.config.titulo} · ${D.config.ano}/${D.config.metade}`;
-        $('#inicio-resumo').textContent = `${D.cursos.length} cursos · ${D.professores.length} professores · ${D.salas.length} salas · ${D.disciplinas.length} disciplinas`;
+        $('#topbar-projeto').textContent = `${D.cursos[0] ? D.cursos[0].nome : 'sem curso'} · ${(D.config.unidade || {}).nome || ''} · ${D.config.ano}/${D.config.metade}`;
+        $('#inicio-resumo').textContent = `${D.cursos[0] ? D.cursos[0].nome : 'sem curso'} · ${D.professores.length} professores · ${D.salas.length} salas · ${D.disciplinas.length} disciplinas · ${(D.externos || []).length} outros cursos`;
     }
 
     function irPara(id) {
@@ -83,7 +95,8 @@
     function renderTudo() {
         renderMenu();
         if (ui.pagina === 'config') renderConfig();
-        if (ui.pagina === 'cursos') renderLista('curso');
+        if (ui.pagina === 'cursos') renderCurso();
+        if (ui.pagina === 'outros') renderOutros();
         if (ui.pagina === 'professores') renderLista('professor');
         if (ui.pagina === 'salas') renderLista('sala');
         if (ui.pagina === 'disciplinas') renderLista('disciplina');
@@ -167,11 +180,11 @@
     }
 
     // ================================================================ janela de formulário
-    function abrirJanela(titulo, corpo, aoSalvar, aoAbrir) {
+    function abrirJanela(titulo, corpo, aoSalvar, aoAbrir, rotulo = 'Salvar') {
         const dlg = $('#janela');
         dlg.innerHTML = `<form method="dialog" novalidate><div class="janela-topo"><h2>${esc(titulo)}</h2><button type="button" data-fechar aria-label="Fechar">×</button></div>
             <div class="janela-corpo">${corpo}</div>
-            <div class="janela-rodape"><button type="button" class="btn btn-secondary" data-fechar>Cancelar</button><button type="submit" class="btn btn-primary">Salvar</button></div></form>`;
+            <div class="janela-rodape"><button type="button" class="btn btn-secondary" data-fechar>Cancelar</button><button type="submit" class="btn btn-primary">${esc(rotulo)}</button></div></form>`;
         const form = $('form', dlg);
         $$('[data-fechar]', dlg).forEach((b) => b.addEventListener('click', () => dlg.close()));
         const ctx = aoAbrir ? aoAbrir(dlg) : {};
@@ -195,13 +208,30 @@
             <div class="campos"><label class="campo"><span>Nome</span><input type="text" name="nome" value="${esc(c.nome)}" required></label>
             <label class="campo"><span>Número de semestres</span><input type="number" name="semestres" min="1" max="20" value="${c.semestres}"><small>Engenharias: 10.</small></label></div>
             <fieldset><legend>Horários de funcionamento para as OFERTAS</legend><div id="sel-oferta"></div></fieldset>
-            <fieldset><legend>Horários de funcionamento para as REOFERTAS</legend><div id="sel-reoferta"></div><small>Nada marcado = sem restrição.</small></fieldset>`,
+            <fieldset><legend>Horários de funcionamento para as REOFERTAS</legend><div id="sel-reoferta"></div><small>Nada marcado = sem restrição.</small></fieldset>
+            <fieldset><legend>Turno preferido por semestre (o gerador tenta; se não der, avisa)</legend>
+                <div class="tabela-wrap"><table class="lista" id="tab-pref"><thead><tr><th>Semestre</th><th>Situação</th>${Object.entries(N.NOME_TURNO).map(([k, v]) => `<th>${v}</th>`).join('')}</tr></thead><tbody></tbody></table></div>
+                <small>Ex.: semestres 1 e 3 de manhã; 5 e 7 à tarde. Nada marcado = sem preferência.</small></fieldset>`,
         (dlg, ctx) => {
             const nome = val(dlg, 'nome'); if (!nome) { aviso('Informe o nome do curso.'); return false; }
-            const novo = { id: c.id || N.novoId('c'), nome, semestres: Math.max(1, Number(val(dlg, 'semestres')) || 10), oferta: ctx.of.valor(), reoferta: ctx.re.valor() };
-            if (c.id) Object.assign(D.cursos.find((x) => x.id === c.id), novo); else D.cursos.push(novo);
+            const preferencias = {};
+            $$('#tab-pref input:checked', dlg).forEach((i) => { (preferencias[i.dataset.sem] = preferencias[i.dataset.sem] || []).push(i.dataset.t); });
+            const novo = { id: c.id || N.novoId('c'), cod: c.cod || null, nome, semestres: Math.max(1, Number(val(dlg, 'semestres')) || 10), oferta: ctx.of.valor(), reoferta: ctx.re.valor(), preferencias };
+            if (c.id) Object.assign(D.cursos.find((x) => x.id === c.id), novo); else D.cursos = [novo];
             return true;
-        }, (dlg) => ({ of: montarSeletor($('#sel-oferta', dlg), c.oferta), re: montarSeletor($('#sel-reoferta', dlg), c.reoferta) }));
+        }, (dlg) => {
+            const pinta = () => {
+                const n = Math.max(1, Number(val(dlg, 'semestres')) || 10);
+                const atual = {};
+                $$('#tab-pref input:checked', dlg).forEach((i) => { (atual[i.dataset.sem] = atual[i.dataset.sem] || []).push(i.dataset.t); });
+                const fonte = Object.keys(atual).length || $('#tab-pref tbody', dlg).children.length ? atual : (c.preferencias || {});
+                $('#tab-pref tbody', dlg).innerHTML = Array.from({ length: n }, (_, i) => i + 1).map((sem) => { const sit = N.situacao(sem, D.config.metade);
+                    return `<tr><td>${sem}º</td><td><span class="etiqueta ${sit}">${sit}</span></td>${Object.keys(N.NOME_TURNO).map((t) => `<td><input type="checkbox" data-sem="${sem}" data-t="${t}"${(fonte[sem] || []).includes(t) ? ' checked' : ''}></td>`).join('')}</tr>`; }).join('');
+            };
+            pinta();
+            $('[name=semestres]', dlg).addEventListener('change', pinta);
+            return { of: montarSeletor($('#sel-oferta', dlg), c.oferta), re: montarSeletor($('#sel-reoferta', dlg), c.reoferta) };
+        });
     }
     // ---------- professor
     function formProfessor(id) {
@@ -246,8 +276,8 @@
     function formDisciplina(id) {
         const q = D.disciplinas.find((x) => x.id === id) || { id: null, codigo: '', nome: '', professor: '', aulas: 4, blocos: '', salas: [], fixos: [], equivalentes: [], ofertas: [] };
         const linhaOferta = (o) => `<div class="linha-oferta">
-            <select name="of-curso">${D.cursos.map((c) => `<option value="${esc(c.id)}"${o.curso === c.id ? ' selected' : ''}>${esc(c.nome)}</option>`).join('')}</select>
-            <input type="number" name="of-sem" min="1" max="20" value="${o.semestre || 1}" title="Semestre">
+            <input type="hidden" name="of-curso" value="${esc((D.cursos[0] || {}).id || '')}"><span>${esc((D.cursos[0] || {}).nome || 'Curso')} — semestre</span>
+            <input type="number" name="of-sem" min="0" max="20" value="${o.semestre === undefined ? 1 : o.semestre}" title="Semestre (0 = optativa ainda sem semestre)">
             <select name="of-car">${Object.entries(N.CARATER).map(([k, v]) => `<option value="${k}"${o.carater === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
             <span class="etiqueta" data-sit></span>
             <button type="button" class="btn btn-secondary btn-sm" data-tira title="Tirar este curso">×</button></div>`;
@@ -257,8 +287,9 @@
             <label class="campo"><span>Professor responsável</span><select name="professor"><option value="">— escolha —</option>${D.professores.map((p) => `<option value="${esc(p.id)}"${q.professor === p.id ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
             <label class="campo"><span>Aulas por semana</span><input type="number" name="aulas" min="0" max="30" value="${q.aulas}"></label>
             <label class="campo"><span>Blocos de aulas seguidas</span><input type="text" name="blocos" value="${esc(q.blocos)}" placeholder="automático"><small>Ex.: 2+2 ou 3. Vazio: até 3 juntas; acima, blocos de 2.</small></label></div>
-            <fieldset><legend>Cursos que usam esta disciplina</legend><div id="ofertas"></div>
-                <button type="button" class="btn btn-secondary btn-sm" data-add-oferta${D.cursos.length ? '' : ' disabled'}>+ Curso</button>
+            <fieldset><legend>Semestre(s) e caráter no curso</legend><div id="ofertas"></div>
+                <button type="button" class="btn btn-secondary btn-sm" data-add-oferta${D.cursos.length ? '' : ' disabled'}>+ Semestre</button>
+                <small class="muted"> Semestre 0 = optativa ainda sem semestre (fica fora da grade). Disciplina com 0 aulas também fica fora (estágio, TCC, EAD).</small>
                 <small class="muted"> No ${D.config.metade}º semestre do ano, as disciplinas dos semestres ${D.config.metade === 1 ? 'ímpares' : 'pares'} do curso são oferta e as dos ${D.config.metade === 1 ? 'pares' : 'ímpares'} são reoferta (no próximo, inverte).</small></fieldset>
             <fieldset><legend>Salas ou laboratórios onde pode ocorrer</legend>${checks('salas', D.salas.map((s) => ({ id: s.id, nome: s.nome + (s.tipo === 'laboratorio' ? ' (lab.)' : '') })), q.salas)}
                 <small>Nada marcado = qualquer sala comum. Laboratório só aceita quem os responsáveis autorizam.</small></fieldset>
@@ -284,11 +315,13 @@
         }, (dlg) => {
             const caixa = $('#ofertas', dlg);
             const atualiza = () => $$('.linha-oferta', dlg).forEach((l) => {
-                const sit = N.situacao($('[name=of-sem]', l).value, D.config.metade);
-                const et = $('[data-sit]', l); et.textContent = sit; et.className = `etiqueta ${sit}`;
+                const sem = Number($('[name=of-sem]', l).value);
+                const sit = sem > 0 ? N.situacao(sem, D.config.metade) : 'a definir';
+                const et = $('[data-sit]', l); et.textContent = sit; et.className = `etiqueta ${sem > 0 ? sit : ''}`;
             });
             caixa.innerHTML = q.ofertas.map(linhaOferta).join('');
             $('[data-add-oferta]', dlg).addEventListener('click', () => { caixa.insertAdjacentHTML('beforeend', linhaOferta({ curso: (D.cursos[0] || {}).id, semestre: 1, carater: 'obrigatoria' })); atualiza(); });
+            if (!q.id && !q.ofertas.length && D.cursos[0]) $('[data-add-oferta]', dlg).click();
             caixa.addEventListener('click', (e) => { if (e.target.closest('[data-tira]')) { e.target.closest('.linha-oferta').remove(); } });
             caixa.addEventListener('input', atualiza);
             atualiza();
@@ -326,7 +359,7 @@
             const lista = D.disciplinas.filter((q) => !f || [q.codigo, q.nome, nomeP(q.professor), ...q.ofertas.map((o) => N.nomeDe(D.cursos, o.curso))].join(' ').toLowerCase().includes(f));
             html = lista.length ? `<table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Professor</th><th>Aulas</th><th>Cursos</th><th>Salas</th><th>Restrições</th><th>Horários (código)</th><th></th></tr></thead><tbody>${lista.map((q) => `<tr>
                 <td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b></td><td>${q.professor ? esc(nomeP(q.professor)) : '<span style="color:var(--perigo)">sem professor</span>'}</td>
-                <td>${q.aulas} <small>(${N.blocos(q).join('+') || '—'})</small></td>
+                <td>${q.aulas ? `${q.aulas} <small>(${N.blocos(q).join('+')})</small>` : '<span class="etiqueta" title="0 aulas ou semestre 0: fica fora da grade">fora da grade</span>'}</td>
                 <td>${q.ofertas.map((o) => { const c = D.cursos.find((x) => x.id === o.curso); const sit = N.situacao(o.semestre, D.config.metade);
                     return `<span class="etiqueta ${sit}" title="${esc(c ? c.nome : '')} — ${o.semestre}º semestre, ${N.CARATER[o.carater]}, ${sit}">${esc(c ? N.sigla(c.nome) : '?')} ${o.semestre}º ${N.CARATER[o.carater].slice(0, 3).toLowerCase()}.</span>`; }).join('') || '<small>—</small>'}</td>
                 <td>${q.salas.map((s) => `<span class="etiqueta lab">${esc(N.nomeDe(D.salas, s))}</span>`).join('') || '<small>salas comuns</small>'}</td>
@@ -353,7 +386,7 @@
     }
 
     function itensDaVisao() {
-        if (ui.visao === 'relacao') return [{ id: '*', nome: 'Todos os cursos' }, ...D.cursos];
+        if (ui.visao === 'relacao') return D.cursos;
         if (ui.visao === 'curso') return D.cursos;
         if (ui.visao === 'professor') return D.professores;
         return D.salas;
@@ -458,7 +491,7 @@
 
     /** Relação de disciplinas e professores com os códigos de horário (sem grade). */
     function renderRelacao() {
-        const linhas = N.relacao(D, ui.item === '*' ? '' : ui.item);
+        const linhas = N.relacao(D, ui.item).filter((l) => l.aulas > 0 && l.semestre > 0);
         const c = N.conflitos(D);
         const comConflito = new Set();
         D.grade.alocacoes.forEach((a, i) => { if ((c.porAloc[i] || []).some((x) => x.gravidade === 'erro')) comConflito.add(a.disc); });
@@ -634,6 +667,155 @@
         }, 30);
     }
 
+
+    // ================================================================ curso (catálogo da UFPel)
+    const unidadesCat = () => (typeof CATALOGO_UFPEL !== 'undefined' ? CATALOGO_UFPEL.unidades : []);
+    const cursoCat = (cod) => { for (const u of unidadesCat()) { const c = u.cursos.find((x) => String(x.cod) === String(cod)); if (c) return c; } return null; };
+
+    function renderCurso() {
+        const el = $('#curso-pagina'), c = D.cursos[0];
+        const uni = unidadesCat().find((u) => u.nome === (D.config.unidade || {}).nome) || unidadesCat()[0];
+        const cat = c && c.cod ? cursoCat(c.cod) : null;
+        const prefs = c ? Object.entries(c.preferencias || {}).filter(([, v]) => v.length) : [];
+        const temMatriz = cat && cat.matriz;
+        const naGrade = D.disciplinas.filter((q) => q.aulas > 0 && q.ofertas.some((o) => o.semestre > 0)).length;
+        el.innerHTML = `<div class="campos">
+            <label class="campo"><span>Unidade</span><select id="cur-unidade">${unidadesCat().map((u) => `<option value="${u.id}"${uni && u.id === uni.id ? ' selected' : ''}>${esc(u.nome)}</option>`).join('')}</select>
+                <small>Cada unidade é autônoma; as salas não podem conflitar entre unidades.</small></label>
+            <label class="campo"><span>Curso (graduação na UFPel)</span><select id="cur-cat"><option value="">— escolha —</option>${(uni ? uni.cursos : []).map((x) => `<option value="${x.cod}"${c && String(c.cod) === String(x.cod) ? ' selected' : ''}>${esc(x.nome)} (${esc(x.grau)})</option>`).join('')}</select>
+                <small>Fonte: <a href="https://institucional.ufpel.edu.br/unidades/id/${uni ? uni.id : 444}" target="_blank" rel="noopener">página da unidade</a>.</small></label>
+            </div>
+            <div class="barra"><button type="button" class="btn btn-primary btn-sm" data-acao="usar-curso">${c ? 'Trocar para o curso escolhido' : 'Usar este curso'}</button></div>
+            ${c ? `<div class="card" style="margin:0;border-left:4px solid var(--verde)"><div class="card-topo"><h2>${esc(c.nome)} <span class="etiqueta">${esc(N.sigla(c.nome))}</span>${c.cod ? ` <small>código ${esc(c.cod)}</small>` : ''}</h2>
+                <button type="button" class="btn btn-secondary btn-sm" data-acao="editar-item" data-tipo="curso" data-id="${esc(c.id)}">Editar horários e turnos preferidos</button></div>
+                <p>${c.semestres} semestres · ${D.disciplinas.length} disciplinas cadastradas (${naGrade} vão para a grade) · oferta: ${resumoHorarios(c.oferta)} · reoferta: ${resumoHorarios(c.reoferta)}</p>
+                <p>Turnos preferidos: ${prefs.length ? prefs.sort((a, b) => a[0] - b[0]).map(([sem, v]) => `<span class="etiqueta">${sem}º: ${v.map((t) => N.NOME_TURNO[t]).join('/')}</span>`).join(' ') : '<small>nenhum (o gerador usa qualquer turno do funcionamento)</small>'}</p>
+                <div class="barra">${temMatriz ? `<button type="button" class="btn btn-primary btn-sm" data-acao="importar-matriz">📥 Importar disciplinas da matriz curricular</button>` : '<small class="muted">Este curso não tem a matriz no catálogo: cadastre as disciplinas à mão.</small>'}
+                ${cat ? `<a class="btn btn-secondary btn-sm" href="${esc(cat.url)}" target="_blank" rel="noopener">↗ Página do curso na UFPel</a>` : ''}</div>
+                ${temMatriz ? `<small class="muted">A importação traz código, nome, semestre e créditos (aulas por semana = créditos). Estágio, TCC, EAD e extensão entram com 0 aulas (fora da grade);
+                    optativas entram com 0 aulas e semestre 0: quando forem ofertadas, informe semestre e aulas. Não repete disciplinas que já existem (pelo código). Depois, escolha o professor de cada uma.</small>` : ''}</div>`
+            : '<p class="vazio">Escolha a unidade e o curso acima.</p>'}`;
+    }
+    function usarCurso() {
+        const cat = cursoCat($('#cur-cat').value);
+        if (!cat) return aviso('Escolha um curso da lista.');
+        const uni = unidadesCat().find((u) => String(u.id) === $('#cur-unidade').value);
+        const c = D.cursos[0];
+        if (c && c.cod === cat.cod) return aviso('Este já é o curso da grade.');
+        if (c && D.disciplinas.length && !confirm(`Trocar ${c.nome} por ${cat.nome}? As disciplinas e a grade atuais saem (salve ou exporte antes, se quiser guardar).`)) return;
+        guardarHistorico();
+        const noite = cat.turno === 'noturno';
+        const T = (t) => N.chavesTurno(D.config, t);
+        D.config.unidade = { id: uni.id, nome: uni.nome };
+        D.cursos = [{ id: N.novoId('c'), cod: cat.cod, nome: cat.nome, semestres: cat.semestres || 10,
+            oferta: noite ? T('noite') : [...T('manha'), ...T('tarde')], reoferta: noite ? T('noite') : [...T('tarde'), ...T('noite')], preferencias: {} }];
+        if (c) { D.disciplinas = []; D.grade = { alocacoes: [], naoAlocadas: [], geradaEm: null }; }
+        D.externos = (D.externos || []).filter((e) => N.normNome(e.curso) !== N.normNome(cat.nome)); // o próprio curso não bloqueia a si mesmo
+        D.config.titulo = `Grade horária — ${cat.nome}`;
+        mudou();
+        aviso(`Curso escolhido: ${esc(cat.nome)}.${cat.matriz ? ' Agora importe as disciplinas da matriz curricular.' : ''}`, 5000);
+    }
+    function importarMatriz() {
+        const c = D.cursos[0], cat = c && cursoCat(c.cod);
+        if (!cat || !cat.matriz) return;
+        const novas = N.disciplinasDaMatriz(cat, c.id, D.disciplinas);
+        if (!novas.length) return aviso('Todas as disciplinas da matriz já estão cadastradas.');
+        guardarHistorico();
+        D.disciplinas.push(...novas);
+        const comAula = novas.filter((q) => q.aulas > 0).length;
+        mudou();
+        aviso(`${novas.length} disciplinas importadas: ${comAula} vão para a grade; ${novas.length - comAula} ficam com 0 aulas (optativas, estágio, TCC, EAD). Falta escolher os professores.`, 7000);
+    }
+
+    // ================================================================ outros cursos
+    function renderOutros() {
+        const ext = N.ocupacoesExternas(D);
+        const profsUsados = new Set(Object.keys(ext.prof)), salasUsadas = new Set(Object.keys(ext.sala));
+        const lista = D.externos || [];
+        $('#lista-outros').innerHTML = lista.length ? `<table class="lista"><thead><tr><th>Curso</th><th>Unidade</th><th>Aulas</th><th>Professores daqui</th><th>Salas daqui</th><th>Origem</th><th></th></tr></thead><tbody>${lista.map((e, i) => {
+            const mesma = !e.unidade || N.normNome(e.unidade) === N.normNome((D.config.unidade || {}).nome);
+            const profs = [...new Set(e.aulas.map((a) => a.professor))].filter((n) => D.professores.some((p) => N.normNome(p.nome) === N.normNome(n)));
+            const salas = [...new Set(e.aulas.map((a) => a.sala))].filter((n) => D.salas.some((x) => N.normNome(x.nome) === N.normNome(n)));
+            return `<tr><td><b>${esc(e.curso)}</b></td><td>${esc(e.unidade || '—')}${mesma ? '' : ' <span class="etiqueta" title="Outra unidade: só as salas bloqueiam">só salas</span>'}</td><td>${e.aulas.length}</td>
+                <td>${mesma ? (profs.map((n) => `<span class="etiqueta">${esc(n)}</span>`).join('') || '<small>nenhum em comum</small>') : '<small>— (outra unidade)</small>'}</td>
+                <td>${salas.map((n) => `<span class="etiqueta lab">${esc(n)}</span>`).join('') || '<small>nenhuma em comum</small>'}</td>
+                <td><small>${esc(e.origem)}${e.versao ? ' · ' + esc(new Date(e.versao).toLocaleDateString('pt-BR')) : ''}</small></td>
+                <td class="acoes"><button type="button" class="btn btn-perigo btn-sm" data-acao="tirar-outro" data-i="${i}" title="Tirar este curso dos bloqueios">×</button></td></tr>`;
+        }).join('')}</tbody></table><p class="muted" style="margin-top:.5rem">${profsUsados.size} professor(es) e ${salasUsadas.size} sala(s) deste curso têm horários bloqueados por outros cursos. Na grade, esses bloqueios aparecem como conflito e o gerador não usa esses horários.</p>`
+            : '<p class="vazio">Nenhum outro curso carregado. Busque no MEGA (os cursos que já salvaram a grade deste período) ou importe o JSON exportado por outro curso.</p>';
+    }
+    function incluirOutros(arquivos, origem) {
+        const ok = [], nao = [];
+        arquivos.forEach((x) => {
+            const dd = N.normalizar(x);
+            dd.cursos.forEach((c) => {
+                const so = dd.cursos.length > 1 ? N.separarCurso(dd, c.id) : dd;
+                const r = N.incluirExterno(D, N.externoDe(so, c.id, origem));
+                (r.ok ? ok : nao).push(r.ok ? c.nome : r.motivo);
+            });
+        });
+        return { ok, nao };
+    }
+    async function megaOutros() {
+        try {
+            aviso('Buscando os outros cursos no MEGA…', 20000);
+            const lista = await Nuvem.outrosCursos(D);
+            guardarHistorico();
+            const r = incluirOutros(lista.map((x) => x.dados), 'MEGA');
+            mudou();
+            aviso(lista.length ? `${r.ok.length} curso(s) carregado(s) do MEGA.${r.nao.length ? '<br><small>' + r.nao.map(esc).join('<br>') + '</small>' : ''}` : `Nenhum outro curso salvo no MEGA para ${D.config.ano}/${D.config.metade}.`, 7000);
+        } catch (e) { if (e.message !== 'cancelado') aviso(esc(e.message), 7000); }
+    }
+    async function megaSalvar() {
+        if (!D.cursos[0]) return aviso('Escolha o curso antes de salvar.');
+        try { aviso('Salvando no MEGA…', 20000); const caminho = await Nuvem.salvar(D, N.exportarCurso); aviso(`Salvo no MEGA:<br><small>${esc(caminho)}</small>`, 6000); } catch (e) { if (e.message !== 'cancelado') aviso(esc(e.message), 7000); }
+    }
+    async function megaAbrir() {
+        let lista;
+        try { aviso('Listando o MEGA…', 20000); lista = await Nuvem.listar(D); } catch (e) { if (e.message !== 'cancelado') aviso(esc(e.message), 7000); return; }
+        $('#aviso').classList.remove('visivel');
+        if (!lista.length) return aviso(`Nada salvo no MEGA para ${D.config.ano}/${D.config.metade}. (O período vem da Configuração.)`, 6000);
+        abrirJanela('Abrir grade do MEGA', `<p class="muted">Período ${D.config.ano}/${D.config.metade}. Escolha o curso e a versão (a mais nova primeiro). A grade aberta substitui a deste navegador.</p>
+            <label class="campo"><span>Curso e versão</span><select name="versao">${lista.map((x, i) => x.versoes.map((v, j) => `<option value="${i}|${j}">${esc(x.unidade)} · ${esc(x.curso)} · ${esc(v.name)}</option>`).join('')).join('')}</select></label>`,
+        (dlg) => {
+            const [i, j] = val(dlg, 'versao').split('|').map(Number);
+            Nuvem.abrir(lista[i].versoes[j]).then((x) => { guardarHistorico(); const externos = D.externos; D = N.normalizar(x); if (!D.externos.length) D.externos = externos; ui.item = null; mudou(); aviso('Grade aberta do MEGA.'); })
+                .catch((e) => aviso('Não consegui abrir: ' + esc(e.message)));
+            return true;
+        }, null, 'Abrir');
+    }
+
+    // ================================================================ importar e exportar JSON
+    let modoImportar = 'perguntar';
+    function exportarJson() {
+        if (!D.cursos[0]) return aviso('Escolha o curso antes de exportar.');
+        baixar(`grade-${N.sigla(D.cursos[0].nome)}-${D.config.ano}-${D.config.metade}.json`, JSON.stringify(N.exportarCurso(D), null, 2), 'application/json');
+        aviso(`Exportado só o curso ${esc(D.cursos[0].nome)} (cadastros e grade; sem as grades dos outros cursos).`, 5000);
+    }
+    function importarJson(x) {
+        const dd = N.normalizar(x);
+        if (!dd.cursos.length) return aviso('Esse arquivo não tem curso. Precisa ser um JSON exportado por este app.');
+        if (modoImportar === 'outro') { guardarHistorico(); const r = incluirOutros([x], 'arquivo'); mudou(); aviso(`${r.ok.length} curso(s) incluído(s) nos bloqueios.${r.nao.length ? '<br><small>' + r.nao.map(esc).join('<br>') + '</small>' : ''}`, 6000); return; }
+        const varios = dd.cursos.length > 1;
+        abrirJanela('Importar JSON', `<p>Arquivo de <b>${esc((dd.config.unidade || {}).nome || '')}</b>, período ${dd.config.ano}/${dd.config.metade}, com ${dd.cursos.length} curso(s): ${dd.cursos.map((c) => esc(c.nome)).join(', ')}.</p>
+            ${varios ? `<label class="campo"><span>Curso desta grade</span><select name="curso">${dd.cursos.map((c) => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('')}</select><small>Cada grade é de um curso só.</small></label>` : ''}
+            <fieldset style="margin-top:.6rem"><legend>Como usar</legend><div class="checks" style="flex-direction:column">
+                <label><input type="radio" name="modo" value="abrir" checked> Abrir como a grade deste navegador (substitui a atual)</label>
+                <label><input type="radio" name="modo" value="outro"> Usar como outro curso (só bloqueia professores e salas)</label>
+                ${varios ? '<label><input type="checkbox" name="demais" checked> Os demais cursos do arquivo entram como outros cursos (bloqueios)</label>' : ''}</div></fieldset>`,
+        (dlg) => {
+            const modo = ($('[name=modo]:checked', dlg) || {}).value;
+            guardarHistorico();
+            if (modo === 'outro') { const r = incluirOutros([x], 'arquivo'); mudou(); aviso(`${r.ok.length} curso(s) incluído(s) nos bloqueios.${r.nao.length ? '<br><small>' + r.nao.map(esc).join('<br>') + '</small>' : ''}`, 6000); return true; }
+            const id = varios ? val(dlg, 'curso') : dd.cursos[0].id;
+            const novo = varios ? N.separarCurso(dd, id) : dd;
+            if (varios && $('[name=demais]', dlg).checked) dd.cursos.filter((c) => c.id !== id).forEach((c) => N.incluirExterno(novo, N.externoDe(N.separarCurso(dd, c.id), c.id, 'arquivo')));
+            D = novo; ui.item = null;
+            aviso('JSON importado.');
+            return true;
+        }, null, 'Importar');
+    }
+
     // ================================================================ arquivo
     function baixar(nome, conteudo, tipo) {
         const blob = new Blob([conteudo], { type: tipo });
@@ -660,6 +842,7 @@
                 case 'salvar-config': salvarConfig(); break;
                 case 'horarios-padrao': $('#cfg-horarios').value = N.horariosPadrao().map((h) => `${h.ini}-${h.fim}`).join('\n'); break;
                 case 'novo-item':
+                    if (tipo === 'disciplina' && !D.cursos[0]) { aviso('Escolha o curso primeiro.'); location.hash = '#cursos'; break; }
                     if (tipo === 'disciplina' && !D.professores.length) aviso('Dica: cadastre os professores antes, para escolher o responsável.');
                     FORMS[tipo](null); break;
                 case 'editar-item': FORMS[tipo](id); break;
@@ -701,10 +884,17 @@
                     aviso('Clique na célula onde a aula vai começar.');
                     break;
                 }
-                case 'salvar-arquivo': baixar(nomeArquivo('json'), JSON.stringify(D, null, 2), 'application/json'); aviso('Arquivo salvo nos downloads.'); break;
-                case 'abrir-arquivo': $('#arquivo-entrada').click(); break;
+                case 'exportar-json': exportarJson(); break;
+                case 'importar-json': modoImportar = 'perguntar'; $('#arquivo-entrada').click(); break;
+                case 'importar-json-outro': modoImportar = 'outro'; $('#arquivo-entrada').click(); break;
+                case 'mega-salvar': megaSalvar(); break;
+                case 'mega-abrir': megaAbrir(); break;
+                case 'mega-outros': megaOutros(); break;
+                case 'tirar-outro': guardarHistorico(); D.externos.splice(Number(alvo.dataset.i), 1); mudou(); break;
+                case 'usar-curso': usarCurso(); break;
+                case 'importar-matriz': importarMatriz(); break;
                 case 'novo':
-                    if (confirm('Começar do zero? Os dados atuais saem deste navegador (salve o arquivo antes, se quiser guardar).')) { guardarHistorico(); D = N.dadosVazios(); ui.item = null; mudou(); location.hash = '#config'; }
+                    if (confirm('Começar a grade de um curso do zero? Os dados atuais saem deste navegador (salve no MEGA ou exporte antes, se quiser guardar).')) { guardarHistorico(); D = N.dadosVazios(); ui.item = null; mudou(); location.hash = '#cursos'; }
                     break;
                 case 'exemplo':
                     if (confirm('Carregar o exemplo? Os dados atuais serão substituídos (dá para desfazer na Grade).')) { guardarHistorico(); D = Exemplo.criar(N); ui.item = null; mudou(); aviso('Exemplo carregado. Vá em Grade e clique em Aleatorizar.'); }
@@ -734,6 +924,7 @@
     });
 
     document.addEventListener('change', (e) => {
+        if (e.target.id === 'cur-unidade') { const u = unidadesCat().find((x) => String(x.id) === e.target.value); if (u) { D.config.unidade = { id: u.id, nome: u.nome }; salvarLocal(); renderCurso(); renderMenu(); } }
         if (e.target.id === 'visao-item') { ui.item = e.target.value; renderGradePagina(); }
         if (e.target.id === 'visao-semestre') { ui.semestre = Number(e.target.value); renderGradePagina(); }
         if (e.target.id === 'sala-alvo') { ui.salaSel = e.target.value; pintarAlvos(); }
@@ -741,7 +932,9 @@
         if (e.target.id === 'arquivo-entrada' && e.target.files[0]) {
             const leitor = new FileReader();
             leitor.onload = () => {
-                try { guardarHistorico(); D = N.normalizar(JSON.parse(leitor.result)); ui.item = null; mudou(); aviso('Arquivo aberto.'); } catch (err) { aviso('Não consegui ler esse arquivo (precisa ser o .json salvo por este app).'); }
+                let x = null;
+                try { x = JSON.parse(leitor.result); } catch (err) { aviso('Não consegui ler esse arquivo (precisa ser o .json exportado por este app).'); }
+                if (x) importarJson(x);
                 e.target.value = '';
             };
             leitor.readAsText(e.target.files[0]);

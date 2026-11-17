@@ -51,10 +51,30 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
    as disciplinas dos semestres ímpares do curso são oferta e as dos pares, reoferta; no 2º, o contrário (não é "1º = tudo
    oferta, 2º = tudo reoferta"). O cálculo já era por paridade (Nucleo.situacao) e tem teste.
 
+23 [resolvido 17/11/2026] Um curso por grade (arquivo/navegador com um curso só; arquivo antigo com vários: escolhe um e os
+   demais viram "outros cursos").
+24 [resolvido 17/11/2026] Professores e laboratórios já alocados por outro curso não podem ser usados no mesmo horário
+   (página "Outros cursos"; conflito na edição e bloqueio no gerador). Mesma disciplina (código) + mesmo professor + mesma
+   sala = turma conjunta (permitido e preferido pelo gerador). Casamento de professores e salas pelo nome.
+25 [resolvido 17/11/2026] Unidade (config.unidade): cada unidade é autônoma (professores só se bloqueiam na mesma unidade),
+   mas as salas não conflitam entre unidades.
+26 [resolvido 17/11/2026] Salvar e abrir no MEGA (pasta GeradorDeHorarios/<ano>-<sem>/<unidade>/<curso>/, versões; conta do
+   grupo; senha guardada pelo navegador; megajs local em js/vendor) e buscar os outros cursos do período.
+27 [resolvido 17/11/2026] Importar e exportar JSON: exportar sempre só um curso (sem os outros); importar como grade ou como
+   outro curso.
+28 [resolvido 17/11/2026] Cursos da página institucional da UFPel (unidade 444, Centro de Engenharias: 9 engenharias e 2
+   tecnológicos) e matrizes curriculares das 9 engenharias (obrigatórias, optativas, créditos), conferidas por semestre.
+   Importação: aulas/semana = créditos; estágio, TCC, EAD e extensão com 0 aulas; optativas com 0 aulas e semestre 0.
+29 [resolvido 17/11/2026] Turno preferido por semestre no curso (ex.: 1 e 3 manhã, 5 e 7 tarde): preferência no gerador e
+   aviso na edição quando fica fora.
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
    passa de um turno para outro (18:50 → 19:00 quebra o bloco).
+30 [fazer] Testar o MEGA com a conta real do grupo (daqui só deu para testar com um MEGA simulado e a janela de entrada).
+31 [fazer] Catálogo só tem o Centro de Engenharias (unidade 444); para as outras unidades, informar as páginas institucionais.
+32 [futuro] Professores e salas comuns entre cursos: um cadastro compartilhado no MEGA evitaria nomes diferentes.
 14 [fazer] A mensagem do pedido foi cortada em "gere um pdf com ...": confirmar com o usuário o conteúdo do PDF (hoje: item 10).
 15 [fazer] Testar com os dados reais do curso (cursos, professores, salas e disciplinas da UFPel).
 16 [fazer] Ativar o GitHub Pages do repositório (Settings → Pages → main, / root), se ainda não estiver ativo.
@@ -62,7 +82,9 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 18 [futuro] Vários anos/períodos no mesmo arquivo; importar disciplinas de planilha.
 
 === QA (16/11/2026)
-- node tests/testes.js: 20 de 20 passaram (após o 6º período da tarde) (inclui gerar o PDF no Node, os horários do CEng e os códigos UFPel).
+- node tests/testes.js: 30 de 30 passaram (inclui MEGA simulado, unidade, turno preferido, matriz e exportação).
+- Playwright 360 e 1366 px: curso pelo catálogo + matriz, turno preferido, exportar (1 curso, sem outros), importar como
+  outro curso e como grade, aleatorizar com bloqueios (0 conflitos), janela do MEGA e megajs local carregando; sem estouro e sem erro de JS. (inclui gerar o PDF no Node, os horários do CEng e os códigos UFPel).
 - Playwright 360 e 1366 px: aba Relação, Configuração e PDF sem estouro e sem erro de JavaScript.
 - Gerador: exemplo (3 cursos, 7 professores, 7 salas, 19 disciplinas, 66 aulas) sem aula sem lugar e sem conflito em 20 sementes.
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript em todas as páginas;

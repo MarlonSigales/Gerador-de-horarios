@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261116h">
+    <link rel="stylesheet" href="css/style.css?v=20261117b">
 </head>
 <body>
     <header class="topbar">
@@ -25,13 +25,20 @@
         <aside class="sidebar" id="sidebar">
             <nav id="sidebar-nav" aria-label="Etapas"></nav>
             <div class="sidebar-arquivo">
-                <span class="sidebar-arquivo-rotulo">Arquivo</span>
-                <button type="button" class="sidebar-arquivo-btn" data-acao="salvar-arquivo" title="Baixa um arquivo .json com cadastros e grade">💾 Salvar arquivo</button>
+                <span class="sidebar-arquivo-rotulo">Nuvem (MEGA)</span>
                 <div class="sidebar-arquivo-linha">
-                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="abrir-arquivo" title="Abre um arquivo .json salvo antes">📂 Abrir</button>
-                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="novo" title="Começa do zero">🗋 Novo</button>
+                    <button type="button" class="sidebar-arquivo-btn" data-acao="mega-salvar" title="Salva uma versão nova deste curso na pasta do MEGA do grupo">☁️ Salvar</button>
+                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="mega-abrir" title="Abre a grade de um curso salva no MEGA">☁️ Abrir</button>
                 </div>
-                <button type="button" class="sidebar-arquivo-btn secundario" data-acao="exemplo" title="Carrega o exemplo pronto">📘 Carregar exemplo</button>
+                <span class="sidebar-arquivo-rotulo">Arquivo JSON</span>
+                <div class="sidebar-arquivo-linha">
+                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="exportar-json" title="Baixa um .json só com este curso (cadastros e grade)">⬇ Exportar</button>
+                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="importar-json" title="Abre um .json: como a grade deste curso ou como outro curso (bloqueios)">⬆ Importar</button>
+                </div>
+                <div class="sidebar-arquivo-linha">
+                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="novo" title="Começa a grade de um curso do zero">🗋 Novo</button>
+                    <button type="button" class="sidebar-arquivo-btn secundario" data-acao="exemplo" title="Carrega o exemplo pronto">📘 Exemplo</button>
+                </div>
                 <input type="file" id="arquivo-entrada" accept=".json,application/json" hidden>
             </div>
         </aside>
@@ -48,7 +55,7 @@
                                 professores, as salas e as disciplinas com as restrições de cada um; clica em <b>Aleatorizar</b> e o
                                 sistema monta uma grade que respeita as regras. Depois, em <b>Editar</b>, você muda o que quiser:
                                 o sistema mostra na hora onde há conflito. No fim, gere o <b>PDF</b>.</p>
-                            <p class="muted">Tudo fica só neste navegador (salvo automaticamente). Use “Salvar arquivo” para guardar uma cópia ou passar para outra pessoa.</p>
+                            <p class="muted">Tudo fica neste navegador (salvo automaticamente). Use ☁️ Salvar (MEGA do grupo) para que os outros cursos vejam a sua grade, ou ⬇ Exportar para baixar o JSON do curso.</p>
                         </div>
                         <div class="card">
                             <div class="card-topo"><h2>Passo a passo</h2><small id="inicio-resumo"></small></div>
@@ -63,6 +70,10 @@
                                     No 1º semestre do ano as disciplinas dos semestres ímpares do curso são oferta e as dos pares são reoferta; no 2º semestre do ano, o contrário.</li>
                                 <li>Uma disciplina pode servir a vários cursos, com caráter obrigatório, optativo ou livre em cada um. No mesmo semestre de um curso não há duas aulas no mesmo horário.</li>
                                 <li>Os responsáveis por um laboratório têm prioridade nele e decidem se aceitam aulas de outros professores.</li>
+                                <li>Cada grade é de <b>um único curso</b> (cursos e matrizes curriculares da UFPel já cadastrados). Professores e laboratórios já alocados por outro curso
+                                    da mesma unidade não são usados no mesmo horário; as <b>salas</b> não conflitam com nenhuma unidade.</li>
+                                <li>Turno preferido por semestre (ex.: semestres 1 e 3 de manhã, 5 e 7 à tarde): o gerador tenta e avisa quando não dá.</li>
+                                <li>Salvar e abrir na pasta do grupo no <b>MEGA</b>; exportar e importar <b>JSON</b> (sempre de um curso só).</li>
                             </ul>
                         </div>
                     </section>
@@ -90,11 +101,27 @@
                         </div>
                     </section>
 
-                    <section class="pagina" id="p-cursos" data-titulo="Cursos" hidden>
+                    <section class="pagina" id="p-cursos" data-titulo="Curso" hidden>
                         <div class="card">
-                            <div class="card-topo"><h2>Cursos</h2><button type="button" class="btn btn-primary btn-sm" data-acao="novo-item" data-tipo="curso">+ Novo curso</button></div>
-                            <p class="muted">Cada curso tem o número de semestres e os horários de funcionamento para as ofertas e para as reofertas.</p>
-                            <div class="tabela-wrap" id="lista-curso"></div>
+                            <div class="card-topo"><h2>Curso desta grade</h2></div>
+                            <p class="muted">Cada grade é de um único curso. Os outros cursos fazem as grades deles e salvam no MEGA (ou exportam o JSON):
+                                os professores e salas que eles já usam ficam bloqueados aqui (página “Outros cursos”).</p>
+                            <div id="curso-pagina"></div>
+                        </div>
+                    </section>
+
+                    <section class="pagina" id="p-outros" data-titulo="Outros cursos" hidden>
+                        <div class="card">
+                            <div class="card-topo"><h2>Outros cursos (bloqueios)</h2>
+                                <div class="barra" style="margin:0"><button type="button" class="btn btn-primary btn-sm" data-acao="mega-outros">☁️ Buscar no MEGA</button>
+                                <button type="button" class="btn btn-secondary btn-sm" data-acao="importar-json-outro">⬆ Importar JSON de outro curso</button></div></div>
+                            <ul>
+                                <li>Professores e laboratórios já alocados por outro curso <b>da mesma unidade</b> não podem ser usados no mesmo horário.</li>
+                                <li>As <b>salas</b> não podem conflitar com nenhum curso, de nenhuma unidade (cada unidade é autônoma para o resto).</li>
+                                <li>A mesma disciplina (mesmo código), com o mesmo professor e na mesma sala, vira <b>turma conjunta</b>: é permitido, e o gerador prefere juntar.</li>
+                                <li>Professores e salas são reconhecidos pelo <b>nome</b> (sem diferença de maiúsculas e acentos): use o mesmo nome em todos os cursos.</li>
+                            </ul>
+                            <div class="tabela-wrap" id="lista-outros"></div>
                         </div>
                     </section>
 
@@ -202,12 +229,14 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261116h"></script>
-    <script src="js/exemplo.js?v=20261116h"></script>
-    <script src="js/logos.js?v=20261116h"></script>
+    <script src="js/nucleo.js?v=20261117b"></script>
+    <script src="js/matrizes.js?v=20261117b"></script>
+    <script src="js/exemplo.js?v=20261117b"></script>
+    <script src="js/nuvem.js?v=20261117b"></script>
+    <script src="js/logos.js?v=20261117b"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
-    <script src="js/pdf.js?v=20261116h"></script>
-    <script src="js/app.js?v=20261116h"></script>
+    <script src="js/pdf.js?v=20261117b"></script>
+    <script src="js/app.js?v=20261117b"></script>
 </body>
 </html>

@@ -1,7 +1,9 @@
 /**
  * © 2026 Gerador de Horários — Marlon Sigales. Todos os direitos reservados; copiar, reproduzir ou alterar exige autorização do autor (ver LICENSE).
  *
- * Exemplo pronto: três engenharias de 10 semestres, salas comuns e três laboratórios com responsáveis.
+ * Exemplo pronto: a grade da Engenharia Agrícola (10 semestres), salas comuns e três laboratórios com responsáveis.
+ * As grades de Controle e Automação e de Civil entram como "outros cursos" (já montadas): seus professores e
+ * laboratórios ficam bloqueados nos horários delas, como viria do MEGA.
  * Os professores, exceto o autor, são fictícios (marcados com "exemplo").
  */
 
@@ -9,7 +11,7 @@
 
 /* global Nucleo */
 const Exemplo = (() => {
-    function criar(N) {
+    function criarCompleto(N) {
         N = N || (typeof Nucleo !== 'undefined' ? Nucleo : require('./nucleo.js'));
         const d = N.dadosVazios();
         d.config.titulo = 'Grade horária — Centro de Engenharias';
@@ -71,7 +73,19 @@ const Exemplo = (() => {
         ];
         return d;
     }
-    return { criar };
+    /** Grade de um curso só (Eng. Agrícola) com os outros dois como ocupações externas. */
+    function criar(N) {
+        N = N || (typeof Nucleo !== 'undefined' ? Nucleo : require('./nucleo.js'));
+        const todos = criarCompleto(N);
+        const r = N.gerar(todos, { semente: 11 });
+        todos.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: '2026-11-16T12:00:00.000Z' };
+        const d = N.separarCurso(todos, 'eagri');
+        d.config.titulo = 'Grade horária — Engenharia Agrícola';
+        d.externos = ['ecaut', 'ecivil'].map((c) => N.externoDe(N.separarCurso(todos, c), c, 'exemplo'));
+        d.grade = { alocacoes: [], naoAlocadas: [], geradaEm: null };
+        return d;
+    }
+    return { criar, criarCompleto };
 })();
 
 if (typeof module !== 'undefined') module.exports = Exemplo;

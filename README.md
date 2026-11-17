@@ -1,31 +1,24 @@
 <!-- © 2026 Gerador de Horários — Marlon Sigales. Todos os direitos reservados; copiar, reproduzir ou alterar exige autorização do autor (ver LICENSE). -->
 # Gerador de Horários
 
-Organiza os horários dos professores nas salas de aula e nos laboratórios. Roda no navegador, sem instalar nada.
+Organiza os horários dos professores nas salas de aula e nos laboratórios, **um curso por grade**. Roda no navegador, sem instalar nada.
 
 **Endereço:** https://marlonsigales.github.io/Gerador-de-horarios/
 
 ## Como usar
-1. **Configuração:** ano e semestre do ano (no 1º semestre do ano as disciplinas dos semestres ímpares do curso são oferta e as dos pares, reoferta; no 2º, o contrário), dias e horários das aulas.
-2. **Cursos:** número de semestres e horários de funcionamento para ofertas e para reofertas.
-3. **Professores:** horários em que cada um não pode dar aula.
-4. **Salas e laboratórios:** horários proibidos, responsáveis e se aceitam aulas de outros professores.
-5. **Disciplinas:** professor responsável, aulas por semana, cursos (obrigatória, optativa ou livre em cada um), salas, equivalentes e horários fixos.
-6. **Grade:** 🎲 *Aleatorizar* monta a grade pelas regras; ✏️ *Editar* deixa mudar à mão, e o sistema mostra na hora onde há conflito.
-7. **PDF:** grades por curso e semestre, por professor e por sala, lista de disciplinas e conflitos.
+1. **Configuração:** ano e semestre do ano (no 1º semestre do ano as disciplinas dos semestres ímpares do curso são oferta e as dos pares, reoferta; no 2º, o contrário), dias e horários (padrão CEng/UFPel, períodos de 50 min).
+2. **Curso:** escolha a unidade e o curso no catálogo da UFPel (Centro de Engenharias, unidade 444) e importe as disciplinas da matriz curricular (engenharias). Defina horários de oferta/reoferta e o turno preferido por semestre.
+3. **Professores**, 4. **Salas e laboratórios**, 5. **Disciplinas** (professor responsável, aulas, salas, equivalentes, horários fixos).
+6. **Outros cursos:** traga do MEGA (ou de JSON) as grades dos outros cursos do período. Professores e laboratórios já alocados por outro curso da mesma unidade ficam bloqueados; salas ficam bloqueadas para qualquer unidade. Mesma disciplina (código), mesmo professor e mesma sala = turma conjunta.
+7. **Grade:** 🎲 *Aleatorizar* monta a grade; ✏️ *Editar* mostra na hora onde há conflito. Visões por semestre, professor, sala e relação com códigos de horário (ex.: 621 622 623 624).
+8. **PDF.**
 
-Os dados ficam no navegador (salvos sozinhos). *Salvar arquivo* baixa um `.json` para guardar ou passar adiante.
-
-## Regras
-- Professor e sala/laboratório não têm duas aulas ao mesmo tempo, a não ser que as disciplinas sejam equivalentes (viram uma turma só, no mesmo horário e na mesma sala).
-- No mesmo semestre de um curso não há duas aulas no mesmo horário.
-- Horários proibidos de professores e salas; horários fixos de disciplinas; horários de funcionamento de cada curso para oferta e reoferta.
-- Responsáveis por laboratório têm prioridade e decidem quem mais pode usar o espaço.
+**Nuvem (MEGA):** a conta é do grupo; pastas `GeradorDeHorarios/<ano>-<semestre>/<unidade>/<curso>/` (uma versão por salvamento). **JSON:** Exportar baixa só o curso; Importar abre como grade ou usa como outro curso.
 
 ## Arquivos
-- `js/nucleo.js` — regras, conflitos e gerador (sem tela; testado no Node).
-- `js/app.js` — interface. `js/pdf.js` — PDF. `js/exemplo.js` — exemplo pronto.
-- `tests/testes.js` — `node tests/testes.js`.
-- `todoQA.txt` — diretrizes, o que foi feito, o que falta e o QA.
+- `js/nucleo.js` — regras, conflitos, gerador, outros cursos, matriz (sem tela; testado no Node).
+- `js/app.js` — interface. `js/pdf.js` — PDF. `js/nuvem.js` — MEGA. `js/exemplo.js` — exemplo.
+- `js/matrizes.js` — catálogo UFPel (gerado de `tools/matrizes-ceng.txt` por `tools/gerar_matrizes_js.py`).
+- `tests/testes.js` — `node tests/testes.js`. `todoQA.txt` — diretrizes, feito, falta e QA.
 
 © 2026 Marlon Sigales. Todos os direitos reservados (ver LICENSE).
