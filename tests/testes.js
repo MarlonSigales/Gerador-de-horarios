@@ -265,13 +265,18 @@ teste('Turno preferido por semestre: o gerador respeita quando dá e avisa quand
     ok(N.conflitos(d).lista.some((x) => x.tipo === 'turno-pref' && x.gravidade === 'aviso'));
 });
 
-teste('Matriz curricular: 9 engenharias do CEng; importar Eng. Agrícola (obrigatórias com aula; estágio, TCC, EAD e optativas com 0)', () => {
+teste('Matriz curricular: 9 engenharias + Geoprocessamento; importar Eng. Agrícola (obrigatórias com aula; estágio, TCC, EAD e optativas com 0)', () => {
     const C = require('../js/matrizes.js');
     const u = C.unidades[0];
     igual([u.id, u.nome], [444, 'Centro de Engenharias']);
     const eng = u.cursos.filter((c) => c.matriz);
-    igual(eng.length, 9);
-    eng.forEach((c) => igual(Math.max(...c.matriz.map((m) => m.sem)), 10, c.nome));
+    igual(eng.length, 10);
+    eng.forEach((c) => igual(Math.max(...c.matriz.map((m) => m.sem)), c.semestres, c.nome));
+    igual(eng.filter((c) => c.semestres === 10).length, 9);
+    const geo = u.cursos.find((c) => c.cod === 5590);
+    igual([geo.semestres, geo.turno, geo.matriz.length], [6, 'noturno', 48]);
+    igual(N.disciplinasDaMatriz(geo, 'g', []).find((q) => q.codigo === '15001176').aulas, 0, 'EAD sem aula presencial');
+    igual(u.cursos.find((c) => c.cod === 8700).matriz, null, '8700 não lida');
     const ea = u.cursos.find((c) => c.cod === 700);
     const ds = N.disciplinasDaMatriz(ea, 'c1', []);
     igual(ds.length, 105);
@@ -281,6 +286,14 @@ teste('Matriz curricular: 9 engenharias do CEng; importar Eng. Agrícola (obriga
     const opt = ds.find((q) => q.codigo === '15000907');
     igual([opt.aulas, opt.ofertas[0].semestre, opt.ofertas[0].carater], [0, 0, 'optativa']);
     igual(N.disciplinasDaMatriz(ea, 'c1', ds).length, 0, 'não repete');
+    igual([calc.creditos, calc.horas], [6, 90]);
+});
+
+teste('Carga horária real: aulas/semana = horas ÷ 15 (para cima); sem horas usa créditos', () => {
+    igual(N.aulasDaCarga({ creditos: 4, horas: 60 }), 4);
+    igual(N.aulasDaCarga({ creditos: 3, horas: 45 }), 3);
+    igual(N.aulasDaCarga({ creditos: 4, horas: 68 }), 5, '1310403: 68 h não cabem em 4 períodos');
+    igual(N.aulasDaCarga({ creditos: 2 }), 2);
 });
 
 teste('Exportar: só o curso, sem as grades dos outros cursos', () => {

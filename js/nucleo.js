@@ -365,11 +365,17 @@ const Nucleo = (() => {
      * estágio, TCC, EAD e extensão com 0 aulas; optativas com 0 aulas e semestre 0 (a definir quando forem ofertadas).
      * Não repete códigos que já existem em `jaExistem`.
      */
+    /** Períodos de 50 min por semana a partir da carga horária real (h ÷ 15, semestre de 18 semanas); sem horas, usa os créditos. */
+    function aulasDaCarga(m) {
+        const h = Number(m && m.horas) || 0;
+        return h > 0 ? Math.ceil(h / 15 - 1e-9) : (Number(m && m.creditos) || 0);
+    }
+
     function disciplinasDaMatriz(cursoCat, cursoId, jaExistem) {
         const tem = new Set((jaExistem || []).map((q) => q.codigo).filter(Boolean));
         return ((cursoCat && cursoCat.matriz) || []).filter((m) => !tem.has(m.codigo)).map((m) => ({
             id: `m${m.codigo}`, codigo: m.codigo, nome: tituloPT(m.nome), professor: '',
-            aulas: m.carater === 'optativa' || SEM_AULA.test(m.nome) ? 0 : m.creditos, blocos: '', salas: [], fixos: [], equivalentes: [],
+            aulas: m.carater === 'optativa' || SEM_AULA.test(m.nome) ? 0 : aulasDaCarga(m), blocos: '', salas: [], fixos: [], equivalentes: [],
             ofertas: [{ curso: cursoId, semestre: m.sem, carater: m.carater }], creditos: m.creditos, horas: m.horas
         }));
     }
@@ -1053,7 +1059,7 @@ const Nucleo = (() => {
         CARATER, POLITICA, DIAS_SEMANA, NOME_TURNO,
         chave, separa, copia, rngSemente, turno, situacao, todasChaves, seguidas, indices, gruposEquivalentes, janelaCursos,
         profPodeNaSala, salasPermitidas, DIVISAO, blocos, turmasDe, sigla, professoresDe, nomesProfessores, nomeDisc, nomeDe, rotuloHorario,
-        gravidadeColisao, relatorios, eventosDoCalendario, datasDoPeriodo, CALENDARIO_URL_2027, calendario2027, lerCalendarioTexto, analisarCalendario, NOME_TIPO_CAL, dataBR, codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
+        gravidadeColisao, relatorios, eventosDoCalendario, datasDoPeriodo, CALENDARIO_URL_2027, calendario2027, lerCalendarioTexto, analisarCalendario, NOME_TIPO_CAL, dataBR, codigoHorario, codigosDisciplina, relacao, normNome, turnosPreferidos, tituloPT, aulasDaCarga, disciplinasDaMatriz, exportarCurso, separarCurso, aulasParaOutros, externoDe, incluirExterno, ocupacoesExternas, conflitos, blocoDe, moverBloco, avaliarMovimento, inserirBloco, faltando, gerar,
         novoId, dadosVazios, horariosPadrao, normalizar, excluir, chavesTurno, remapearConfig
     };
 })();

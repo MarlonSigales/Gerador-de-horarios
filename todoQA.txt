@@ -2,7 +2,7 @@
 
 TODO / QA — Gerador de Horários
 Marcadores: [fazer] [futuro] [resolvido] [rejeitado]
-Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referência).
+Atualizado em 17/11/2026 (versão 1). Os números são fixos (servem de referência).
 
 === DIRETRIZES PERMANENTES
 - Mesma identidade visual dos outros apps (cores, topo, menu lateral verde-petróleo, rodapé).
@@ -131,6 +131,14 @@ Atualizado em 16/11/2026 (versão 1). Os números são fixos (servem de referên
 51 [resolvido 17/11/2026] Divisão das aulas na semana: padrão do curso (Configuração) e escolha por disciplina — todas
    seguidas (um bloco), em duas partes (5 → 3+2, em dias diferentes se der), automático (até 3 juntas; acima, blocos
    de 2) ou personalizado (ex.: 3+2; soma conferida). Prévia no cadastro. Texto antigo "2+2" é convertido ao abrir.
+
+52 [resolvido 17/11/2026] Matrizes exatas de todos os cursos da unidade 444 (páginas de cada curso no sistema
+   institucional): 9 engenharias (10 semestres) conferidas por uma 2ª extração independente — semestre, código,
+   créditos e horas idênticos em 797 linhas; Geoprocessamento (5590, noturno, 6 semestres, 48 disciplinas) incluído.
+   Carga horária real: aulas/semana = horas ÷ 15 arredondado para cima (1310403: 68 h → 5 períodos); créditos e
+   horas aparecem na lista de disciplinas. Nº de semestres do curso = último semestre da matriz.
+53 [fazer] Industrialização da Madeira e Sustentabilidade (8700): a página do curso dá erro do site (3 tentativas em
+   17/11/2026); matriz não lida. Tentar de novo pelo navegador ou com o PDF do PPC.
 
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00

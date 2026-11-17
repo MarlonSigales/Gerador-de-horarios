@@ -1,5 +1,5 @@
 # © 2026 Gerador de Horários — Marlon Sigales. Todos os direitos reservados; copiar, reproduzir ou alterar exige autorização do autor (ver LICENSE).
-# Gera js/matrizes.js a partir de tools/matrizes-ceng.txt. Rodar: python3 tools/gerar_matrizes_js.py
+# Gera js/matrizes.js (semestres = último semestre da matriz; horas = carga horária real do site) a partir de tools/matrizes-ceng.txt. Rodar: python3 tools/gerar_matrizes_js.py
 import json, os
 raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 cursos, atual = [], None
@@ -11,10 +11,13 @@ for linha in open(os.path.join(raiz, 'tools', 'matrizes-ceng.txt'), encoding='ut
         atual = {'cod': int(p[0]), 'nome': p[1], 'grau': p[2], 'turno': p[3] or 'integral', 'semestres': 10 if 'sem-matriz' not in p[4] else 0,
                  'url': f'https://institucional.ufpel.edu.br/cursos/cod/{p[0]}', 'matriz': [] if 'sem-matriz' not in p[4] else None}
         cursos.append(atual); continue
+    if atual['matriz'] is None: continue
     sem, cod, nome, cr, h, car = linha.split('|')
     if sem not in ('OPT',) and not sem.isdigit(): continue  # atividades complementares e de extensão: sem aula
     atual['matriz'].append({'sem': 0 if sem == 'OPT' else int(sem), 'codigo': cod, 'nome': nome, 'creditos': int(cr) if cr.strip().isdigit() else 0,
                             'horas': int(h) if h.strip().isdigit() else 0, 'carater': 'optativa' if sem == 'OPT' else 'obrigatoria'})
+for c in cursos:  # nº de semestres = último semestre da matriz; sem matriz = 0 (não lida)
+    if c['matriz']: c['semestres'] = max(x['sem'] for x in c['matriz'])
 cat = {'fonte': 'https://institucional.ufpel.edu.br/unidades/id/444', 'extraidoEm': '2026-11-17',
        'unidades': [{'id': 444, 'nome': 'Centro de Engenharias', 'sigla': 'CEng', 'cursos': cursos}]}
 with open(os.path.join(raiz, 'js', 'matrizes.js'), 'w', encoding='utf-8') as f:
