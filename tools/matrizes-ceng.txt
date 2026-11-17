@@ -875,5 +875,5 @@ OPT|15000575|PROJETOS TÉCNICO-CIENTÍFICOS EM GEOPROCESSAMENTO I|6|90|Optativa
 OPT|15000576|PROJETOS TÉCNICO-CIENTÍFICOS EM GEOPROCESSAMENTO II|6|90|Optativa
 OPT|15000577|PROJETOS TÉCNICO-CIENTÍFICOS EM GEOPROCESSAMENTO III|6|90|Optativa
 OPT|15000572|SENSORIAMENTO REMOTO AVANÇADO|4|60|Optativa
-# 8700: a página do curso não abriu (erro do site) em 17/11/2026 — matriz não lida.
+# 8700: a página do curso dá 404 no portal institucional (17/11/2026) — matriz não publicada.
 @CURSO 8700|Industrialização da Madeira e Sustentabilidade|Tecnológico||sem-matriz
