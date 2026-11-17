@@ -512,12 +512,12 @@ const Nucleo = (() => {
     }
     /**
      * Horários do CEng/UFPel, períodos de 50 min:
-     * manhã 8h–12h30 (intervalo 9h40–10h); tarde 13h30–18h30 (intervalo 15h40–16h); noite 19h–22h30 (intervalo 20h40–20h50).
-     * Na tarde, 13h30–15h40 são 130 min (não fecha em períodos de 50): ficam 2 períodos e 15h10–15h40 sem aula.
+     * manhã 8h–12h30 (intervalo 9h40–10h); tarde 13h30–18h30 (intervalo 16h–16h20); noite 19h–22h30 (intervalo 20h40–20h50).
+     * Na tarde cabem 5 períodos (3 antes e 2 depois do intervalo), até 18h; 18h–18h30 fica sem aula.
      */
     function horariosPadrao() {
         return [['08:00', '08:50'], ['08:50', '09:40'], ['10:00', '10:50'], ['10:50', '11:40'], ['11:40', '12:30'],
-            ['13:30', '14:20'], ['14:20', '15:10'], ['16:00', '16:50'], ['16:50', '17:40'], ['17:40', '18:30'],
+            ['13:30', '14:20'], ['14:20', '15:10'], ['15:10', '16:00'], ['16:20', '17:10'], ['17:10', '18:00'],
             ['19:00', '19:50'], ['19:50', '20:40'], ['20:50', '21:40'], ['21:40', '22:30']].map(([ini, fim]) => ({ ini, fim }));
     }
 
