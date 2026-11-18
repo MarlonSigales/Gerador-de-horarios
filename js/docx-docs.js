@@ -5,6 +5,7 @@
  *  - Plano de ensino no modelo do dia a dia (PRG/UFPel): identificação, docência, ementa, objetivos, metodologia, programa,
  *    cronograma (datas do calendário vigente, com feriados), atividades, avaliação, bibliografia, aprovações e assinaturas.
  *  - RAAD do ano corrente, pré-preenchido (resumo no formato do relatório da UFPel).
+ *  - Horários do curso no padrão do Centro de Engenharias (capa do colegiado, grade e lista por semestre, pedidos e salas).
  */
 
 'use strict';
@@ -149,7 +150,105 @@ const DocxDocs = (() => {
         return (typeof window !== 'undefined' && window.Blob) ? d.Packer.toBlob(documento) : d.Packer.toBuffer(documento);
     }
 
-    return { plano, raad };
+    /**
+     * Horários do curso no padrão do Centro de Engenharias (objeto de Nucleo.horariosCeng): A4 paisagem, Times New Roman;
+     * capa do colegiado com o calendário; por semestre, cabeçalho (UFPel/CEng | curso, semestre, ano, período), grade
+     * manhã/tarde/noite com "código – sigla" e "Nome – turma" e a lista Disciplina | Turma | Professor | SIAPE | Vagas | Observação.
+     * No fim: pedidos de vagas e demanda de salas.
+     */
+    async function horariosCeng(h) {
+        const d = lib(), F = 'Times New Roman';
+        const LARG = 15100; // 297 mm − margens de 15 mm, em twips
+        const run = (t, o = {}) => new d.TextRun({ text: String(t === undefined || t === null ? '' : t), font: F, size: o.size || 18, bold: !!o.bold, color: o.color });
+        const par = (filhos, o = {}) => new d.Paragraph({ alignment: o.centro ? d.AlignmentType.CENTER : d.AlignmentType.LEFT, spacing: { before: o.antes || 0, after: o.depois || 0 },
+            indent: o.recuo ? { left: o.recuo } : undefined, keepNext: !!o.junto, children: (Array.isArray(filhos) ? filhos : [run(filhos, o)]) });
+        const b1 = { style: d.BorderStyle.SINGLE, size: 4, color: '000000' }, b0 = { style: d.BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+        const tab = (linhas, pcts, o = {}) => {
+            const cols = pcts.map((x) => Math.round(LARG * x / 100));
+            return new d.Table({ width: { size: cols.reduce((a, b) => a + b, 0), type: d.WidthType.DXA }, columnWidths: cols, layout: d.TableLayoutType.FIXED,
+                rows: linhas.map((cs, li) => { let i = 0; return new d.TableRow({ cantSplit: true, tableHeader: !!(o.cabecalho && li === 0), height: o.altura && li >= (o.alturaDesde || 0) ? { value: o.altura, rule: d.HeightRule.ATLEAST } : undefined, children: cs.map((c) => {
+                    const span = c.span || 1, w = cols.slice(i, i + span).reduce((a, b) => a + b, 0); i += span;
+                    const bb = o.semBorda ? b0 : b1;
+                    return new d.TableCell({ children: c.filhos.length ? c.filhos : [par('')], columnSpan: span > 1 ? span : undefined, width: { size: w, type: d.WidthType.DXA },
+                        borders: { top: bb, bottom: bb, left: bb, right: bb }, verticalAlign: d.VerticalAlign.CENTER,
+                        shading: c.fundo ? { type: d.ShadingType.CLEAR, fill: c.fundo, color: 'auto' } : undefined, margins: { top: 20, bottom: 20, left: 60, right: 60 } });
+                }) }); }) });
+        };
+        const C = (filhos, o = {}) => Object.assign({ filhos: Array.isArray(filhos) ? filhos : [filhos] }, o);
+        const rot = (r, v) => par([run(r), run(v, { bold: true })]);
+        const cabecalho = (sem) => tab([
+            [C(par('UNIVERSIDADE FEDERAL DE PELOTAS')), C(rot('CURSO: ', h.curso.toUpperCase()), { span: 3 })],
+            [C(par(h.unidade.toUpperCase())), C(rot('SEMESTRE: ', sem)), C(rot('ANO: ', String(h.ano))), C(rot('PERÍODO: ', h.periodo))]
+        ], [45, 19, 18, 18], { semBorda: true });
+        const DIAS = ['SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'SÁBADO', 'DOMINGO'];
+        const larguraDia = (n) => (100 - 7) / n;
+        const gradeTurno = (bloco, comCab, ndias) => {
+            const linhas = [];
+            if (comCab) linhas.push([C(par('HORA', { centro: true, size: 14 })), ...Array.from({ length: ndias }, (_, i) => C(par(DIAS[i] || '', { centro: true, size: 14 })))]);
+            bloco.linhas.forEach((l) => linhas.push([C(par(l.hora, { centro: true, size: 14 })), ...l.dias.map((aulas) => C(aulas.flatMap((a, k) => [
+                par(`${a.codigo}${a.codigo ? ' – ' : ''}${a.sigla}`, { centro: true, size: 18, antes: k ? 40 : 0 }),
+                par(`${a.nome}${a.turma ? ' – ' + a.turma : ''}`, { centro: true, bold: true, size: 18 })])))]));
+            return tab(linhas, [7, ...Array.from({ length: ndias }, () => larguraDia(ndias))], { altura: 330, alturaDesde: comCab ? 1 : 0 });
+        };
+        const listaSem = (lista) => tab([
+            ['Disciplina', 'Turma', 'Professor', 'SIAPE', 'Vagas', 'Observação'].map((x) => C(par(x, { bold: true, size: 18 }), { fundo: 'D9D9D9' })),
+            ...lista.map((l) => [C(par(l.disciplina, { bold: true, size: 20 })), C(par(l.turma, { centro: true, size: 20 })), C(par(l.professor, { size: 20 })), C(par(l.siape, { size: 20 })),
+                C(par(l.vagas, { centro: true, size: 20 })), C(par(l.observacao, { size: 20 }))])
+        ], [26, 6, 22, 9, 7, 30], { cabecalho: true });
+        const quebra = () => new d.Paragraph({ children: [new d.PageBreak()] });
+        const corpo = [];
+        // capa
+        [h.universidade, h.unidade, `Curso de ${h.curso}`, `Colegiado do Curso de ${h.curso}`].forEach((x) => corpo.push(par(x, { centro: true, bold: true, size: 18 })));
+        corpo.push(par('', { depois: 160 }));
+        corpo.push(par(`Colegiado do Curso de ${h.curso}`, { bold: true, size: 26 }));
+        [['Coordenador: ', h.colegiado.coordenador], ['Email: ', h.colegiado.email], ['Secretária: ', h.colegiado.secretaria], ['Email: ', h.colegiado.emailSecretaria || h.colegiado.email], ['Site: ', h.colegiado.site]]
+            .filter(([, v]) => v).forEach(([r, v]) => corpo.push(par([run(r, { bold: true, size: 18 }), run(v, { size: 18, color: r === 'Site: ' ? '1F4E9E' : undefined })], { recuo: 560 })));
+        corpo.push(par('', { depois: 240 }));
+        if (h.calendario) corpo.push(par(`CALENDÁRIO ACADÊMICO: Início ${h.calendario.inicio} - Término: ${h.calendario.fim}`, { bold: true, size: 30, color: 'E00000', recuo: 560 }));
+        if (h.versao) corpo.push(par(`Prévia dos horários ${h.ano}.${h.periodo.replace('º', '')} ${h.versao}`, { size: 20, recuo: 560, antes: 120 }));
+        // semestres
+        const ndias = Math.max(1, ...h.paginas.flatMap((p) => p.grade.flatMap((g) => g.linhas.map((l) => l.dias.length))));
+        h.paginas.forEach((p) => {
+            corpo.push(quebra(), cabecalho(p.semestre), par('', { depois: 40 }));
+            p.grade.forEach((g, i) => { if (i) corpo.push(par('Intervalo', { size: 16, recuo: 200, antes: 80, depois: 80 })); corpo.push(gradeTurno(g, i === 0, ndias)); });
+            corpo.push(par('', { depois: 120 }));
+            corpo.push(p.lista.length ? listaSem(p.lista) : par('Sem disciplinas com horário neste semestre.', { size: 18 }));
+        });
+        // pedidos de vagas
+        const pe = h.pedidos || { enviados: [], recebidos: [] };
+        const R = { pendente: 'Pendente', aceito: 'Aceito', 'aceito-vagas': 'Aceito, com redução de vagas', 'aceito-horario': 'Aceito, em outro horário', 'aceito-turma': 'Aceito, com turma extra', negado: 'Negado' };
+        const cabT = (xs) => xs.map((x) => C(par(x, { bold: true, size: 18 }), { fundo: 'D9D9D9' }));
+        const cel = (x) => C(par(String(x || ''), { size: 18 }));
+        if (pe.enviados.length || pe.recebidos.length) {
+            corpo.push(quebra(), cabecalho('PEDIDOS'), par('', { depois: 80 }));
+            if (pe.enviados.length) {
+                corpo.push(par('Pedidos internos (feitos pelo curso)', { bold: true, size: 22, depois: 60 }));
+                corpo.push(tab([cabT(['Código', 'Disciplina', 'Turma', 'Vagas', 'Horário', 'Curso', 'Oferta/Reoferta', 'Professor', 'Ciência do professor', 'Resposta']),
+                    ...pe.enviados.map((e) => [e.codigo, e.disciplina, e.turma, e.vagas, e.horario, e.curso, e.situacao, e.professor, e.ciencia ? 'ok' : '', `${R[e.resposta] || ''}${e.obs ? ' — ' + e.obs : ''}`].map(cel))],
+                [8, 18, 5, 5, 12, 10, 8, 12, 7, 15], { cabecalho: true }), par('', { depois: 160 }));
+            }
+            if (pe.recebidos.length) {
+                corpo.push(par('Pedidos recebidos de outros cursos', { bold: true, size: 22, depois: 60 }));
+                corpo.push(tab([cabT(['Curso', 'Código', 'Disciplina', 'Horário', 'Oferta/Reoferta', 'Vagas', 'Resposta']),
+                    ...pe.recebidos.map((e) => [e.curso, e.codigo, e.disciplina, e.horario, e.situacao, e.vagas, `${R[e.resposta] || ''}${e.obs ? ' — ' + e.obs : ''}`].map(cel))],
+                [10, 10, 24, 14, 10, 7, 25], { cabecalho: true }));
+            }
+        }
+        // demanda de salas
+        const dm = h.demanda;
+        if (dm && dm.linhas.length) {
+            corpo.push(quebra(), cabecalho('SALAS'), par('', { depois: 80 }));
+            corpo.push(par(`Demanda de salas — pico de ${dm.picoSalas} sala(s) comum(ns) ao mesmo tempo${dm.horariosPico.length ? ` (horários ${dm.horariosPico.join(' ')})` : ''}.`, { bold: true, size: 22, depois: 60 }));
+            corpo.push(tab([cabT(['Disciplina', 'Código', 'Turma', 'Professor', 'Horários (código UFPel)', 'Vagas', 'Sala/laboratório', 'Observação']),
+                ...dm.linhas.map((l) => [l.disciplinas.join(' / '), l.codigos.join(' / '), l.turma, l.professores.join(', '), l.horarios.join(' '), l.vagas || '', l.semSala ? 'Não precisa de sala' : (l.sala || 'a definir'), l.observacao].map(cel))],
+            [20, 9, 5, 15, 16, 5, 13, 17], { cabecalho: true }));
+        }
+        const documento = new d.Document({ creator: 'Gerador de Horários', title: `Horários ${h.curso} ${h.ano}.${h.periodo}`, styles: { default: { document: { run: { font: F, size: 18 } } } },
+            sections: [{ properties: { page: { size: { orientation: d.PageOrientation.LANDSCAPE, width: 11906, height: 16838 }, margin: { top: 400, bottom: 400, left: 850, right: 850 } } }, children: corpo }] });
+        return (typeof window !== 'undefined' && window.Blob) ? d.Packer.toBlob(documento) : d.Packer.toBuffer(documento);
+    }
+
+    return { plano, raad, horariosCeng };
 })();
 
 if (typeof module !== 'undefined') module.exports = DocxDocs;

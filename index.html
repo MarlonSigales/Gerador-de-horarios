@@ -8,7 +8,7 @@
     <meta name="description" content="Organiza os horários de professores em salas de aula e laboratórios: cadastro das restrições, geração aleatória, edição com conflitos destacados e PDF. Roda no navegador.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261117q">
+    <link rel="stylesheet" href="css/style.css?v=20261117r">
 </head>
 <body>
     <header class="topbar">
@@ -84,6 +84,7 @@
                             <h2>Período, dias e horários</h2>
                             <div class="campos">
                                 <label class="campo"><span>Título da grade</span><input type="text" id="cfg-titulo"></label>
+                                <label class="campo"><span>Versão da prévia</span><input type="text" id="cfg-versao" placeholder="ex.: V1"><small>"Prévia dos Horários 2026.2 V1".</small></label>
                                 <label class="campo"><span>Ano</span><input type="number" id="cfg-ano" min="2000" max="2100"></label>
                                 <label class="campo"><span>Semestre do ano (período letivo)</span>
                                     <select id="cfg-metade"><option value="1">1º semestre do ano: semestres ímpares do curso = oferta, pares = reoferta</option><option value="2">2º semestre do ano: semestres pares do curso = oferta, ímpares = reoferta</option></select>
@@ -168,6 +169,7 @@
                             </ul>
                             <div class="tabela-wrap" id="lista-outros"></div>
                         </div>
+                        <div class="card" id="card-pedidos"></div>
                     </section>
 
                     <section class="pagina" id="p-professores" data-titulo="Professores" hidden>
@@ -255,12 +257,21 @@
                                     <label><input type="checkbox" id="pdf-sala" checked> Grade de cada sala e laboratório</label>
                                     <label><input type="checkbox" id="pdf-relacao" checked> Relação de disciplinas e professores por curso e semestre, com os códigos de horário (ex.: 621 622 623 624), sem grade</label>
                                     <label><input type="checkbox" id="pdf-disciplinas" checked> Lista das disciplinas (professor responsável, cursos, salas)</label>
+                                    <label><input type="checkbox" id="pdf-previa" checked> Prévia por semestre (turma, professor, CR, vagas para o curso e situação: com horário, sem horário, não será ofertada)</label>
+                                    <label><input type="checkbox" id="pdf-pedidos" checked> Pedidos de vagas (feitos e recebidos, com a resposta)</label>
+                                    <label><input type="checkbox" id="pdf-demanda" checked> Demanda de salas (turma, horários, vagas, sala)</label>
                                     <label><input type="checkbox" id="pdf-conflitos" checked> Conflitos e aulas sem lugar</label>
                                     <label><input type="checkbox" id="pdf-calendario" checked> No fim: calendário acadêmico vigente — feriados, dias letivos e disciplinas mais prejudicadas</label>
                                     <label><input type="checkbox" id="pdf-vazios"> Incluir semestres, professores e salas sem aula</label>
                                 </div>
                             </fieldset>
                             <div class="barra"><button type="button" class="btn btn-primary" data-acao="gerar-pdf">📄 Gerar PDF</button><small class="muted" id="pdf-info"></small></div>
+                        </div>
+                        <div class="card">
+                            <h2>Documento de horários do CEng (.docx)</h2>
+                            <p>No padrão do Centro de Engenharias: A4 deitado; capa do colegiado com o calendário; uma página por semestre e uma das optativas, com a grade (código – sigla / nome – turma) e a lista Disciplina, Turma, Professor, SIAPE, Vagas e Observação. No fim, os pedidos de vagas e a demanda de salas.
+                                Os dados do colegiado ficam em Curso → Editar; SIAPE e tratamento (Prof./Profa.), no cadastro de cada professor.</p>
+                            <div class="barra"><button type="button" class="btn btn-primary" data-acao="docx-ceng">📝 Baixar horários no padrão CEng (.docx)</button></div>
                         </div>
                     </section>
 
@@ -287,17 +298,17 @@
     <dialog class="janela" id="janela"></dialog>
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/nucleo.js?v=20261117q"></script>
-    <script src="js/matrizes.js?v=20261117q"></script>
-    <script src="js/exemplo.js?v=20261117q"></script>
-    <script src="js/nuvem.js?v=20261117q"></script>
-    <script src="js/planos.js?v=20261117q"></script>
-    <script src="js/logos.js?v=20261117q"></script>
+    <script src="js/nucleo.js?v=20261117r"></script>
+    <script src="js/matrizes.js?v=20261117r"></script>
+    <script src="js/exemplo.js?v=20261117r"></script>
+    <script src="js/nuvem.js?v=20261117r"></script>
+    <script src="js/planos.js?v=20261117r"></script>
+    <script src="js/logos.js?v=20261117r"></script>
     <script src="js/vendor/jspdf.umd.min.js"></script>
     <script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
     <script src="js/vendor/docx.umd.js"></script>
-    <script src="js/docx-docs.js?v=20261117q"></script>
-    <script src="js/pdf.js?v=20261117q"></script>
-    <script src="js/app.js?v=20261117q"></script>
+    <script src="js/docx-docs.js?v=20261117r"></script>
+    <script src="js/pdf.js?v=20261117r"></script>
+    <script src="js/app.js?v=20261117r"></script>
 </body>
 </html>

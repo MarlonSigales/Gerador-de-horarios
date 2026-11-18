@@ -847,6 +847,71 @@ teste('Leitor do portal: disciplina e curso (estrutura real das páginas)', () =
     ok(!JSON.stringify(c).includes('ALUNO UM'), 'nome de aluno não pode ser guardado');
 });
 
+// ================================================================ planilha da coordenação e documento do CEng
+const prevSimples = () => {
+    const d = N.dadosVazios();
+    d.cursos = [{ id: 'c', nome: 'Engenharia Agrícola', semestres: 2, sigla: 'EA', coordenador: 'Prof. Ádamo de Sousa Araújo', emailColegiado: 'ccea@x', secretaria: 'Tatiane', site: 'wp.ufpel.edu.br/cea' }];
+    d.professores = [{ id: 'a', nome: 'Ana', titulo: 'Profa.', siape: '123' }, { id: 'b', nome: 'Bruno' }, { id: 'c2', nome: 'Caio' }];
+    d.salas = [{ id: 's1', nome: 'S1' }, { id: 'lab', nome: 'Lab. 401', tipo: 'laboratorio' }];
+    d.disciplinas = [
+        { id: 'x', codigo: '1', nome: 'X', turma: 'M1', professor: 'a', aulas: 2, vagasCurso: '20+20', observacao: 'Lab. 401 – cotada', salas: ['lab'], ofertas: [{ curso: 'c', semestre: 1 }] },
+        { id: 'tcc', codigo: '2', nome: 'TCC', professor: 'b', aulas: 2, semSala: true, ofertas: [{ curso: 'c', semestre: 2 }] },
+        { id: 'opt1', codigo: '3', nome: 'Opt 1', professor: 'b', aulas: 2, ofertas: [{ curso: 'c', semestre: 0, carater: 'optativa' }] },
+        { id: 'opt2', codigo: '4', nome: 'Opt 2', professor: 'c2', aulas: 2, ofertas: [{ curso: 'c', semestre: 0, carater: 'optativa' }] },
+        { id: 'nao', codigo: '5', nome: 'Não vai', professor: 'c2', aulas: 4, naoOfertada: true, ofertas: [{ curso: 'c', semestre: 1 }] }];
+    d.pedidos = { enviados: [{ codigo: '15000768', disciplina: 'Cálculo A', vagas: 10, curso: 'NUB', resposta: 'aceito' }], recebidos: [{ curso: 'EAS', codigo: '15000006', disciplina: 'Hidráulica', resposta: 'xyz' }] };
+    return N.normalizar(d);
+};
+
+teste('Prévia: situação (com horário, sem horário, não será ofertada); optativas no bloco do curso; sem sala; não ofertada fica fora', () => {
+    const d = prevSimples();
+    const r = N.gerar(d, { semente: 2 });
+    d.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+    igual(r.naoAlocadas.length, 0);
+    ok(!r.alocacoes.some((a) => a.disc === 'nao'), 'não ofertada não entra');
+    ok(r.alocacoes.filter((a) => a.disc === 'tcc').every((a) => a.sala === ''), 'TCC sem sala');
+    ok(r.alocacoes.some((a) => a.disc === 'opt1') && r.alocacoes.some((a) => a.disc === 'opt2'), 'optativas sem semestre vão para a grade');
+    const k = (id) => new Set(r.alocacoes.filter((a) => a.disc === id).map((a) => `${a.d}|${a.h}`));
+    ok(![...k('opt1')].some((s) => k('opt2').has(s)), 'o gerador evita optativas no mesmo horário');
+    igual(['x', 'nao'].map((id) => N.situacaoOferta(d, d.disciplinas.find((q) => q.id === id))), ['horario', 'nao-ofertada']);
+    const c = N.conflitos(d);
+    igual([c.erros, c.lista.filter((x) => x.tipo === 'faltam').length], [0, 0], 'não ofertada não "falta" na grade');
+    d.grade.alocacoes.push({ disc: 'x', d: 0, h: 0, sala: '' });
+    ok(N.conflitos(d).lista.some((x) => x.tipo === 'sala-definir' && x.gravidade === 'leve'), 'sala a definir = aviso leve');
+    // optativas no mesmo horário: aviso (não erro)
+    const o2 = d.grade.alocacoes.find((a) => a.disc === 'opt2');
+    d.grade.alocacoes.push({ disc: 'opt1', d: o2.d, h: o2.h, sala: 's1' });
+    ok(N.conflitos(d).lista.some((x) => x.tipo === 'turma-opt' && x.gravidade === 'aviso'));
+});
+
+teste('Pedidos de vagas: normalizar guarda enviados e recebidos (resposta desconhecida vira pendente)', () => {
+    const d = prevSimples();
+    igual([d.pedidos.enviados[0].vagas, d.pedidos.enviados[0].resposta, d.pedidos.recebidos[0].resposta], ['10', 'aceito', 'pendente']);
+    igual(N.normalizar({}).pedidos, { enviados: [], recebidos: [] });
+});
+
+teste('Demanda de salas e documento do CEng: capa do colegiado, uma página por semestre e optativas, lista com SIAPE, vagas e observação', async () => {
+    const d = prevSimples();
+    d.config.ano = 2027; d.config.metade = 1;
+    const r = N.gerar(d, { semente: 2 });
+    d.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+    const dm = N.demandaSalas(d);
+    const lx = dm.linhas.find((l) => l.codigos.includes('1'));
+    igual([lx.sala, lx.vagas, lx.horarios.length], ['Lab. 401', 20, 2]);
+    ok(dm.linhas.find((l) => l.codigos.includes('2')).semSala);
+    const h = N.horariosCeng(d);
+    igual(h.paginas.map((p) => p.semestre), ['1º', '2º', 'OPTATIVAS']);
+    const l1 = h.paginas[0].lista[0];
+    igual([l1.disciplina, l1.turma, l1.professor, l1.siape, l1.vagas], ['X', 'M1', 'Profa. Ana', '123', '20+20']);
+    ok(h.paginas[1].lista[0].observacao.includes('Não precisa de sala'));
+    igual([h.colegiado.coordenador, h.sigla, h.calendario.inicio], ['Prof. Ádamo de Sousa Araújo', 'EA', '08/03/2027']);
+    const cel = h.paginas[0].grade.flatMap((g) => g.linhas.flatMap((x) => x.dias.flat()))[0];
+    igual([cel.codigo, cel.sigla, cel.turma], ['1', 'EA', 'M1']);
+    const X = require('../js/docx-docs.js');
+    const buf = await X.horariosCeng(h);
+    ok(buf.length > 5000, 'docx gerado');
+});
+
 teste('PDF: gera com o exemplo (capa, grades, disciplinas, conflitos)', () => {
     global.Nucleo = N;
     global.LOGOS_PDF = require('vm').runInNewContext(require('fs').readFileSync(path.join(__dirname, '../js/logos.js'), 'utf8') + ';LOGOS_PDF');

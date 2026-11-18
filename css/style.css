@@ -269,3 +269,9 @@ td.alvo-leve:hover { outline: 2px solid var(--teal); outline-offset: -2px; }
 .mini-barras b{font-size:.7rem;color:#334}
 .mini-barras small{position:absolute;bottom:-1.3rem;font-size:.65rem;color:#5c6b6a;white-space:nowrap}
 .texto-portal{font-size:.88rem;line-height:1.45;max-height:16rem;overflow:auto;background:#f7faf9;border-radius:6px;padding:.5rem .6rem}
+
+/* situação da oferta (cores da prévia da coordenação) */
+.sit-oferta{display:inline-block;font-size:.72rem;font-weight:600;padding:.05rem .45rem;border-radius:999px;margin-top:.15rem}
+.sit-horario{background:#2e9e48;color:#fff}
+.sit-sem-horario{background:#ffe14d;color:#3a3200}
+.sit-nao-ofertada{background:#e0322f;color:#fff}

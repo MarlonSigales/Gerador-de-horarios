@@ -152,7 +152,65 @@ const GeradorPDF = (() => {
                 legenda('Disciplinas: ' + discs.map((q) => { const o = q.ofertas.find((x) => x.curso === cu.id && Number(x.semestre) === s);
                     return `${q.codigo ? q.codigo + ' ' : ''}${q.nome} (${N.nomesProfessores(D, q) || 'sem professor'}; ${N.CARATER[o.carater].toLowerCase()}; ${q.aulas} aulas)`; }).join(' · ') + '.  Células cinza: fora do funcionamento do curso; vermelho/(!): conflito.');
             }
+            const opts = D.disciplinas.filter((q) => !q.naoOfertada && Number(q.aulas) > 0 && q.ofertas.some((o) => o.curso === cu.id && Number(o.semestre) === 0 && o.carater === 'optativa'));
+            if (opts.length) {
+                novaPagina();
+                cabecalho(`${cu.nome} — Optativas`, `${cfg.titulo} — ${periodo}`);
+                grade((a) => opts.some((q) => q.id === a.disc), (a, q) => `${nomesCurtos(q)} · ${N.nomeDe(D.salas, a.sala)}`, () => false, null);
+                legenda('Optativas: ' + opts.map((q) => `${q.codigo ? q.codigo + ' ' : ''}${q.nome}${q.turma ? ' – ' + q.turma : ''} (${N.nomesProfessores(D, q) || 'sem professor'})`).join(' · ') + '.');
+            }
         });
+
+        // ---------------- prévia por semestre (como a planilha da coordenação): turma, professor, CR, vagas e situação
+        if (op.previa !== false && D.disciplinas.length) D.cursos.forEach((cu) => {
+            const COR = { horario: [46, 158, 72], 'sem-horario': [255, 225, 77], 'nao-ofertada': [224, 50, 47] };
+            const body = [];
+            const grupos = [];
+            for (let s = 1; s <= cu.semestres; s++) grupos.push({ rot: `${s}º semestre (${N.situacao(s, cfg.metade)})`, ds: D.disciplinas.filter((q) => q.ofertas.some((o) => o.curso === cu.id && Number(o.semestre) === s)) });
+            grupos.push({ rot: 'Optativas', ds: D.disciplinas.filter((q) => (Number(q.aulas) > 0 || q.naoOfertada) && q.ofertas.some((o) => o.curso === cu.id && Number(o.semestre) === 0 && o.carater === 'optativa')) });
+            grupos.forEach((g) => {
+                const ds = g.ds.filter((q) => Number(q.aulas) > 0 || q.naoOfertada || alocs.some((a) => a.disc === q.id));
+                if (!ds.length) return;
+                body.push([{ content: txt(g.rot), colSpan: 8, styles: { fillColor: VERDE_CLARO, textColor: VERDE, fontStyle: 'bold' } }]);
+                ds.forEach((q, i) => { const st = N.situacaoOferta(D, q); body.push([String(i + 1), q.codigo || '', q.nome, q.turma || '', N.nomesProfessores(D, q) || '', String(q.creditos || ''), q.vagasCurso || '', N.SITUACAO_OFERTA[st]].map(txt).concat([])); body[body.length - 1].st = st; });
+            });
+            if (!body.length) return;
+            novaPagina();
+            cabecalho(`Prévia dos horários — ${cu.nome}${cfg.versaoPrevia ? ' ' + cfg.versaoPrevia : ''}`, `${cfg.titulo} — ${periodo}`);
+            doc.autoTable({ startY: 25, margin: { left: 10, right: 10, bottom: 12 }, head: [['Nº', 'Código', 'Disciplina', 'Turma', 'Professor', 'CR', 'Vagas/Curso', 'Situação']], body,
+                theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 7.6, cellPadding: 1.1 },
+                columnStyles: { 0: { cellWidth: 9, halign: 'center' }, 1: { cellWidth: 18 }, 2: { cellWidth: 80 }, 3: { cellWidth: 14, halign: 'center' }, 4: { cellWidth: 62 }, 5: { cellWidth: 10, halign: 'center' }, 6: { cellWidth: 22, halign: 'center' } },
+                didParseCell: (h) => { const st = h.section === 'body' && h.row.raw && h.row.raw.st; if (st && h.column.index === 7) { h.cell.styles.fillColor = COR[st]; h.cell.styles.textColor = st === 'sem-horario' ? [60, 50, 0] : [255, 255, 255]; h.cell.styles.fontStyle = 'bold'; } } });
+        });
+
+        // ---------------- pedidos de vagas
+        const PD = D.pedidos || { enviados: [], recebidos: [] };
+        const RESP = { pendente: 'Pendente', aceito: 'Aceito', 'aceito-vagas': 'Aceito, com redução de vagas', 'aceito-horario': 'Aceito, em outro horário', 'aceito-turma': 'Aceito, com turma extra', negado: 'Negado' };
+        if (op.pedidos !== false && (PD.enviados.length || PD.recebidos.length)) {
+            novaPagina();
+            cabecalho('Pedidos de vagas', `${cfg.titulo} — ${periodo}`);
+            let y = 25;
+            if (PD.enviados.length) {
+                doc.autoTable({ startY: y, margin: { left: 10, right: 10, bottom: 12 }, head: [['Código', 'Disciplina', 'Turma', 'Vagas', 'Horário', 'Curso', 'Oferta/Reoferta', 'Professor', 'Ciência', 'Resposta']],
+                    body: PD.enviados.map((e) => [e.codigo, e.disciplina, e.turma, e.vagas, e.horario, e.curso, e.situacao, e.professor, e.ciencia ? 'ok' : '', `${RESP[e.resposta]}${e.obs ? ' — ' + e.obs : ''}`].map(txt)),
+                    theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 7.5, cellPadding: 1.1 } });
+                y = doc.lastAutoTable.finalY + 6;
+            }
+            if (PD.recebidos.length) doc.autoTable({ startY: y, margin: { left: 10, right: 10, bottom: 12 }, head: [['Curso', 'Código', 'Disciplina', 'Horário', 'Oferta/Reoferta', 'Vagas', 'Resposta (pedidos recebidos)']],
+                body: PD.recebidos.map((e) => [e.curso, e.codigo, e.disciplina, e.horario, e.situacao, e.vagas, `${RESP[e.resposta]}${e.obs ? ' — ' + e.obs : ''}`].map(txt)),
+                theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 7.5, cellPadding: 1.1 } });
+        }
+
+        // ---------------- demanda de salas
+        if (op.demanda !== false && alocs.length) {
+            const dm = N.demandaSalas(D);
+            novaPagina();
+            cabecalho('Demanda de salas', `${cfg.titulo} — ${periodo}`);
+            doc.setFontSize(8.5); doc.text(txt(`Pico: ${dm.picoSalas} sala(s) comum(ns) ao mesmo tempo${dm.horariosPico.length ? ` (horários ${dm.horariosPico.join(' ')})` : ''}.`), 10, 26);
+            doc.autoTable({ startY: 29, margin: { left: 10, right: 10, bottom: 12 }, head: [['Disciplina', 'Código', 'Turma', 'Professor', 'Horários (código)', 'Vagas', 'Sala/laboratório', 'Observação']],
+                body: dm.linhas.map((l) => [l.disciplinas.join(' / '), l.codigos.join(' / '), l.turma, l.professores.join(', '), l.horarios.join(' '), String(l.vagas || ''), l.semSala ? 'Não precisa de sala' : (l.sala || 'a definir'), l.observacao].map(txt)),
+                theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 7.4, cellPadding: 1.1 }, columnStyles: { 4: { font: 'courier', fontStyle: 'bold' } } });
+        }
 
         // ---------------- professores
         if (op.professor !== false) D.professores.forEach((p) => {

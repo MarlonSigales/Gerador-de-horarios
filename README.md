@@ -27,3 +27,5 @@ Organiza os horários dos professores nas salas de aula e nos laboratórios, **u
 - `tests/testes.js` — `node tests/testes.js`. `todoQA.txt` — diretrizes, feito, falta e QA.
 
 © 2026 Marlon Sigales. Todos os direitos reservados (ver LICENSE).
+
+- `js/docx-docs.js` — planos de ensino, RAAD e o documento de horários no padrão do CEng (.docx).

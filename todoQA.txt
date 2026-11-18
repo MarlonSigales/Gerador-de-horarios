@@ -157,6 +157,25 @@ Atualizado em 17/11/2026 (versão 1). Os números são fixos (servem de referên
    ementas e alunos (professores não mudam sem o curso querer). O portal bloqueia pedidos rápidos (HTTP 403): o robô lê
    uma página por vez, espera quando é bloqueado e completa aos poucos (primeiro o que está mais velho). As turmas de cada
    período ficam guardadas: é daí que sai o "semestre anterior" (hoje o portal só mostra o período atual, 2026/2).
+60 [resolvido 17/11/2026] Funções da planilha da coordenação (Prévia dos Horários, Ádamo/EA) que faltavam:
+   situação de cada disciplina com as cores da planilha (oferta com horário / sem horário definido / não será
+   (re)ofertada — esta fica fora do gerador e da contagem de faltas); vagas para o curso (ex.: 20+20); observação
+   (laboratório cotado, campus, turma extra); "não precisa de sala" (estágio, TCC, EAD: o gerador não põe sala);
+   optativas com aulas e sem semestre viram o bloco "Optativas" do curso (o gerador evita coincidir; coincidir = aviso);
+   SIAPE e tratamento (Prof./Profa./Dr.) do professor; dados do colegiado (coordenação, e-mails, secretaria, site);
+   versão da prévia (V1, V2...); pedidos de vagas feitos (centro/curso, vagas, horário, professor, ciência) e
+   recebidos (com a resposta: aceito, com redução de vagas, em outro horário, com turma extra, negado);
+   demanda de salas (turma, horários, vagas, sala, pico de salas por horário). Sala vazia = "a definir" (aviso leve).
+61 [resolvido 17/11/2026] Saída .docx no padrão do CEng (modelo "Horários Engenharia Agrícola 2026.2"): A4 deitado,
+   Times; capa do colegiado com o calendário; por semestre e optativas: cabeçalho UFPel/CEng | curso, semestre, ano,
+   período; grade manhã/tarde/noite com "código – sigla" e "Nome – turma" (turmas paralelas na mesma célula); lista
+   Disciplina | Turma | Professor | SIAPE | Vagas | Observação. No fim: pedidos de vagas e demanda de salas.
+   O PDF ganhou a grade das optativas, a prévia por semestre (com as cores), os pedidos e a demanda de salas.
+62 [resolvido 17/11/2026] EA-2026-2.json (para importar): montado do documento do CEng 2026.2 (198 aulas fixadas,
+   turmas, professores, vagas, observações, horários do documento 08:00…22:10) + situação da prévia 2026.2 (cores da
+   planilha: 16 não reofertadas, 1 sem horário) + pedidos de vagas 2026.2 (página 7) + calendário 2026 da CRA.
+   Correções feitas na montagem: Física Básica III com o código da Física Básica I (usado 11090034); Elementos de
+   Máquinas com "5001095" (usado 15001095). 0 erros de conflito; salas comuns ficam "a definir".
 59 [fazer] Conferir no Actions que a coleta completa (cerca de 540 disciplinas) termina sem bloqueios; se o portal
    continuar bloqueando, aumentar PAUSA_MS no workflow.
 
