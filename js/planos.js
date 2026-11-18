@@ -41,7 +41,10 @@ const Planos = (() => {
         (dados.salas || []).forEach((s) => { salaPorNome[n.normNome(s.nome)] = s; });
         const ehLab = (nomeSala) => { const s = salaPorNome[n.normNome(nomeSala)]; return s ? s.tipo === 'laboratorio' : /^lab/i.test(String(nomeSala || '')); };
         const pessoas = {};
-        const pessoa = (nome) => { const k = n.normNome(nome); return (pessoas[k] = pessoas[k] || { nome, sala: 0, lab: 0, disciplinas: new Set(), cursos: new Set(), vistos: new Set(), pesquisa: 0 }); };
+        const pessoa = (nome) => { const k = n.normNome(nome); return (pessoas[k] = pessoas[k] || { nome, sala: 0, lab: 0, disciplinas: new Set(), cursos: new Set(), vistos: new Set(), pesquisa: 0, turmas: new Map() }); };
+        // turma = grupo de equivalentes (códigos dados juntos contam uma turma; os alunos de todos os códigos somam)
+        const alunosGrupo = {};
+        (dados.disciplinas || []).forEach((q) => { const g = eq.grupoDe[q.id] || q.id; alunosGrupo[g] = (alunosGrupo[g] || 0) + (Number(q.alunos) || 0); });
         const meuCurso = (dados.cursos[0] || {}).nome || '';
         // esta grade (turma conjunta conta uma vez)
         ((dados.grade && dados.grade.alocacoes) || []).forEach((a) => {
@@ -54,6 +57,8 @@ const Planos = (() => {
                 const horas = dur(h.ini, h.fim);
                 if (ehLab(n.nomeDe(dados.salas, a.sala))) p.lab += horas; else p.sala += horas;
                 p.disciplinas.add(q.codigo || q.nome); p.cursos.add(meuCurso);
+                const g = eq.grupoDe[q.id] || q.id;
+                p.turmas.set(`${meuCurso}|${g}`, alunosGrupo[g] || 0);
             });
         });
         if (escopo === 'unidade') {
@@ -66,6 +71,7 @@ const Planos = (() => {
                         p.cursos.add(ex.curso);
                         const ch = `${au.dia}|${au.ini}`;
                         if (p.vistos.has(ch)) return; p.vistos.add(ch); // turma conjunta: mesmo horário conta uma vez
+                        p.turmas.set(`${ex.curso}|${au.codigo || au.disciplina}|${au.turma || ''}`, Number(au.alunos) || 0); // só horário novo: conjunta não soma de novo
                         const horas = dur(au.ini, au.fim) || 50 / 60;
                         if (ehLab(au.sala)) p.lab += horas; else p.sala += horas;
                         p.disciplinas.add(au.codigo || au.disciplina);
@@ -81,14 +87,18 @@ const Planos = (() => {
         const r2 = (x) => Math.round(x * 100) / 100;
         return Object.values(pessoas).map((p) => {
             const aula = p.sala + p.lab;
+            const turmas = p.turmas.size, alunos = [...p.turmas.values()].reduce((s, x) => s + x, 0);
             return { nome: p.nome, sala: r2(p.sala), lab: r2(p.lab), aula: r2(aula), preparo: r2(aula * fator), pesquisa: r2(p.pesquisa),
-                total: r2(aula + aula * fator + p.pesquisa), disciplinas: p.disciplinas.size, cursos: [...p.cursos] };
+                total: r2(aula + aula * fator + p.pesquisa), disciplinas: p.disciplinas.size, cursos: [...p.cursos],
+                turmas, alunos, alunosTurma: turmas ? r2(alunos / turmas) : 0, horasPorAluno: alunos ? r2(aula / alunos) : 0 };
         }).sort((a, b) => b.total - a.total);
     }
 
+    /** Campos com média e desvio padrão na verificação (horas, turmas e alunos). */
+    const CAMPOS_VERIF = ['sala', 'lab', 'aula', 'preparo', 'pesquisa', 'total', 'disciplinas', 'turmas', 'alunos', 'alunosTurma'];
     /** Verificação interna: médias e desvios padrões das horas dos professores (curso e unidade). */
     function verificacao(dados) {
-        const bloco = (lista) => ({ professores: lista, estat: Object.fromEntries(['sala', 'lab', 'aula', 'preparo', 'pesquisa', 'total', 'disciplinas'].map((k) => [k, estatistica(lista.map((p) => p[k]))])) });
+        const bloco = (lista) => ({ professores: lista, estat: Object.fromEntries(CAMPOS_VERIF.map((k) => [k, estatistica(lista.map((p) => p[k]))])) });
         return { curso: bloco(horasProfessores(dados, 'curso')), unidade: bloco(horasProfessores(dados, 'unidade')), fatorPreparo: Number(dados.config.fatorPreparo ?? 1) };
     }
 
@@ -109,20 +119,28 @@ const Planos = (() => {
     const TEXTO_APROVACOES = 'Os casos omissos neste Plano de Ensino serão previamente resolvidos entre os discentes e o Professor Regente, ou sob sua supervisão, e, posteriormente, pelo corpo docente da instância responsável pela disciplina.';
     const TEXTO_AVALIACAO = 'Alunos com Média Semestral >= 7,0 serão aprovados, desde que mantenham frequência de pelo menos 75%.\nOs alunos que não obtiverem a nota mínima para aprovação (Média Semestral < 7,0 e >= 3,0) e tiverem frequência de pelo menos 75% serão submetidos a um exame. Alunos com Média Semestral < 3,0 serão reprovados, sem possibilidade de realização de exame.';
 
+    /** Ementa e objetivos publicados no portal, separando o objetivo geral dos específicos quando o texto marca. */
+    function objetivosDoPortal(disc) {
+        const u = disc.ufpel || {};
+        const txt = String(u.objetivos || '').replace(/^\s*Objetivo Geral:\s*\n(Objetivo geral:\s*\n)?/i, 'Objetivo Geral:\n');
+        const m = txt.match(/Objetivo Geral:?\s*\n?([\s\S]*?)(?:\n\s*(?:Objetivos? Espec[íi]ficos?:?|Espec[íi]ficos?:)\s*\n?([\s\S]*))?$/i);
+        return { ementa: u.ementa || '', objetivoGeral: m ? (m[1] || '').trim() : txt.trim(), objetivosEspecificos: m ? (m[2] || '').trim() : '' };
+    }
+
     /** Conteúdo padrão (pré-preenchido) de um plano para a disciplina. Campos de texto ficam para o professor. */
     function conteudoPadrao(dados, disc) {
         const n = N();
         const horas = Number(disc.horas) || (Number(disc.creditos) || Number(disc.aulas) || 0) * 15;
         const aulasSemana = ((dados.grade && dados.grade.alocacoes) || []).filter((a) => a.disc === disc.id).length || Number(disc.aulas) || 0;
         return {
-            codigo: disc.codigo || '', nome: disc.nome, turma: '', codigoUnidade: '', responsavel: `Câmara de Ensino do ${(dados.config.unidade || {}).nome || 'Centro'}`,
+            codigo: disc.codigo || '', nome: disc.nome, turma: disc.turma || '', codigoUnidade: '', responsavel: `Câmara de Ensino do ${(dados.config.unidade || {}).nome || 'Centro'}`,
             curriculo: 'semestral', creditos: Number(disc.creditos) || Number(disc.aulas) || 0, cargaTeorica: horas, cargaPratica: 0,
             distribuicao: { E: 0, D: 0, EX: 0 }, preRequisitos: '',
             // responsável primeiro, depois os regentes (todos dão aula; o encargo de cada um pode ser ajustado no plano)
             docentes: n.professoresDe(disc).map((p, i) => ({ nome: n.nomeDe(dados.professores, p), teorica: aulasSemana, pratica: 0, vinculo: i === 0 && disc.professor === p ? 'Professor Responsável' : 'Professor Regente' })),
-            observacoesDocencia: '', ementa: '', objetivoGeral: '', objetivosEspecificos: '', metodologia: '', programa: '',
+            observacoesDocencia: '', ...objetivosDoPortal(disc), metodologia: '', programa: (disc.ufpel && disc.ufpel.conteudo) || '',
             roteiro: '', eventosSemAula: 'siiepe', datasSemAula: '', atividadesDiscentes: '', avaliacao: TEXTO_AVALIACAO,
-            bibliografiaBasica: '', bibliografiaComplementar: '', outrasInformacoes: '', aprovacoes: TEXTO_APROVACOES, discenteRepresentante: true
+            bibliografiaBasica: (disc.ufpel && disc.ufpel.bibliografiaBasica) || '', bibliografiaComplementar: (disc.ufpel && disc.ufpel.bibliografiaComplementar) || '', outrasInformacoes: '', aprovacoes: TEXTO_APROVACOES, discenteRepresentante: true
         };
     }
     /** Junta o conteúdo salvo (de outro semestre) com o padrão: o salvo manda; o que faltar vem do padrão. */
@@ -280,13 +298,19 @@ const Planos = (() => {
         const n = N(), k = n.normNome(nomeProfessor);
         const prof = (dados.professores || []).find((p) => n.normNome(p.nome) === k);
         if (!prof) return [];
-        return (dados.disciplinas || []).filter((q) => n.professoresDe(q).includes(prof.id) && ((dados.grade && dados.grade.alocacoes) || []).some((a) => a.disc === q.id)).map((q) => {
+        const eq = n.gruposEquivalentes(dados);
+        const minhas = (dados.disciplinas || []).filter((q) => n.professoresDe(q).includes(prof.id) && ((dados.grade && dados.grade.alocacoes) || []).some((a) => a.disc === q.id));
+        // vários códigos dados juntos (equivalentes, mesmo horário): uma turma só, com a maior carga; os outros códigos vão junto
+        const porGrupo = {};
+        minhas.forEach((q) => { const g = eq.grupoDe[q.id] || q.id; if (!porGrupo[g] || n.cargaDe(q) > n.cargaDe(porGrupo[g])) porGrupo[g] = q; });
+        return Object.values(porGrupo).map((q) => {
+            const juntos = minhas.filter((x) => (eq.grupoDe[x.id] || x.id) === (eq.grupoDe[q.id] || q.id) && x.id !== q.id).map((x) => x.codigo).filter(Boolean);
             const c = conteudo(dados, q, (planosSalvos || {})[q.codigo || q.id]);
             const creditos = Number(c.creditos) || Number(q.creditos) || Number(q.aulas) || 0;
             const ch = creditos * 18;
             const tot = (Number(c.cargaTeorica) || 0) + (Number(c.cargaPratica) || 0);
             const chP = tot ? Math.round(ch * (Number(c.cargaPratica) || 0) / tot * 100) / 100 : 0;
-            return { periodo: `${dados.config.ano}/${dados.config.metade}`, codigo: q.codigo || '', nome: q.nome, turma: c.turma || '', vinculo: q.professor === prof.id ? 'Professor responsável pela turma' : 'Professor regente',
+            return { periodo: `${dados.config.ano}/${dados.config.metade}`, codigo: [q.codigo || '', ...juntos].filter(Boolean).join(' / '), nome: q.nome, turma: c.turma || q.turma || '', vinculo: q.professor === prof.id ? 'Professor responsável pela turma' : 'Professor regente',
                 creditos, ch, chT: Math.round((ch - chP) * 100) / 100, chP, chE: 0, chEAD: 0, chEX: 0 };
         });
     }
@@ -366,7 +390,7 @@ const Planos = (() => {
         return r;
     }
 
-    return { estatistica, horasProfessores, verificacao, rendimento, conteudoPadrao, conteudo, cursosAtendidos, localHorario, lerRoteiro, lerDatasSemAula,
+    return { CAMPOS_VERIF, objetivosDoPortal, estatistica, horasProfessores, verificacao, rendimento, conteudoPadrao, conteudo, cursosAtendidos, localHorario, lerRoteiro, lerDatasSemAula,
         cronograma, planoDoSemestre, hashSenha, individualVazio, exportarIndividual, turmasDoSemestre, registrarSemestre, raad, exportarUnidade, importarUnidade, TEXTO_APROVACOES };
 })();
 

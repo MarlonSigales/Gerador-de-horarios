@@ -57,6 +57,7 @@
         { id: 'grade', titulo: 'Grade', num: 7, conta: () => { const c = N.conflitos(D); return c.erros ? { t: `⚠ ${c.erros}`, ruim: true } : (D.grade.alocacoes.length ? '✓' : ''); } },
         { id: 'pdf', titulo: 'PDF', num: 8 },
         { id: 'professor', titulo: 'Área do professor', icone: '👤' },
+        { id: 'indicadores', titulo: 'Indicadores dos cursos', icone: '📊' },
         { id: 'relatorios', titulo: 'Relatórios (adm)', icone: '🔒' }
     ];
     const DESCR = {
@@ -108,6 +109,7 @@
         if (ui.pagina === 'pdf') renderPdfInfo();
         if (ui.pagina === 'relatorios') renderRelatorios();
         if (ui.pagina === 'professor') renderProfessor();
+        if (ui.pagina === 'indicadores') renderIndicadores();
     }
 
     // ================================================================ configuração
@@ -296,6 +298,9 @@
             <div class="campos"><label class="campo"><span>Código</span><input type="text" name="codigo" value="${esc(q.codigo)}"></label>
             <label class="campo" style="grid-column: span 2"><span>Nome</span><input type="text" name="nome" value="${esc(q.nome)}" required></label>
             <label class="campo"><span>Professor responsável</span><select name="professor"><option value="">— escolha —</option>${D.professores.map((p) => `<option value="${esc(p.id)}"${q.professor === p.id ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</select></label>
+            <label class="campo"><span>Turma</span><input type="text" name="turma" value="${esc(q.turma || '')}" placeholder="ex.: T1 (vazio = turma única)"></label>
+            <label class="campo"><span>Alunos matriculados</span><input type="number" name="alunos" min="0" max="999" value="${q.alunos === null || q.alunos === undefined ? '' : q.alunos}">
+                <small>${q.alunosOrigem === 'ufpel' ? 'Do portal da UFPel (atualiza sozinho até você mudar).' : 'Usado nas métricas de alunos por turma e por professor.'}</small></label>
             <label class="campo"><span>Aulas por semana</span><input type="number" name="aulas" min="0" max="30" value="${q.aulas}"></label>
             <label class="campo"><span>Divisão das aulas na semana</span><select name="divisao">
                 <option value=""${!q.divisao ? ' selected' : ''}>Padrão do curso (${esc(N.DIVISAO[D.config.divisaoPadrao || 'auto'].split(' (')[0].toLowerCase())})</option>
@@ -311,7 +316,8 @@
             <fieldset><legend>Salas ou laboratórios onde pode ocorrer</legend>${checks('salas', D.salas.map((s) => ({ id: s.id, nome: s.nome + (s.tipo === 'laboratorio' ? ' (lab.)' : '') })), q.salas)}
                 <small>Nada marcado = qualquer sala comum. Laboratório só aceita quem os responsáveis autorizam.</small></fieldset>
             <fieldset><legend>Disciplinas equivalentes (mesma turma, mesmo horário e mesma sala)</legend>${checks('equiv', D.disciplinas.filter((x) => x.id !== q.id).map((x) => ({ id: x.id, nome: N.nomeDisc(x) })), q.equivalentes)}</fieldset>
-            <details${q.fixos.length ? ' open' : ''}><summary style="cursor:pointer;font-weight:600;color:var(--teal)">Horários fixos (opcional): a disciplina só ocorre nos horários marcados</summary><div id="sel-fixos" style="margin-top:.4rem"></div></details>`,
+            <details${q.fixos.length ? ' open' : ''}><summary style="cursor:pointer;font-weight:600;color:var(--teal)">Horários fixos (opcional): a disciplina só ocorre nos horários marcados</summary><div id="sel-fixos" style="margin-top:.4rem"></div></details>
+            ${htmlPortalDisc(q)}`,
         (dlg, ctx) => {
             const nome = val(dlg, 'nome'); if (!nome) { aviso('Informe o nome da disciplina.'); return false; }
             const linhas = $$('.linha-oferta', dlg);
@@ -321,7 +327,9 @@
             const professor = val(dlg, 'professor');
             const divisao = val(dlg, 'divisao');
             if (divisao === 'manual') { const pt = val(dlg, 'blocos').split(/[+,; ]+/).map(Number).filter((x) => x > 0); if (pt.reduce((a, b) => a + b, 0) !== (Number(val(dlg, 'aulas')) || 0)) { aviso('No personalizado, a soma dos blocos precisa dar as aulas por semana (ex.: 3+2 = 5).'); return false; } }
-            const novo = { id: novoId, codigo: val(dlg, 'codigo'), nome, professor, regentes: marcados(dlg, 'regentes').filter((p) => p !== professor), aulas: Number(val(dlg, 'aulas')) || 0, blocos: divisao === 'manual' ? val(dlg, 'blocos') : '', divisao,
+            const alunosTxt = val(dlg, 'alunos'), alunos = alunosTxt === '' ? null : Math.max(0, Number(alunosTxt) || 0);
+            const mudouAlunos = alunos !== (q.alunos === undefined ? null : q.alunos);
+            const novo = { id: novoId, codigo: val(dlg, 'codigo'), nome, turma: val(dlg, 'turma'), alunos, alunosOrigem: mudouAlunos ? (alunos === null ? '' : 'manual') : (q.alunosOrigem || ''), professor, regentes: marcados(dlg, 'regentes').filter((p) => p !== professor), aulas: Number(val(dlg, 'aulas')) || 0, blocos: divisao === 'manual' ? val(dlg, 'blocos') : '', divisao,
                 salas: marcados(dlg, 'salas'), fixos: ctx.f.valor(), equivalentes, ofertas };
             if (q.id) Object.assign(D.disciplinas.find((x) => x.id === q.id), novo); else D.disciplinas.push(novo);
             // equivalência vale nos dois sentidos
@@ -356,12 +364,25 @@
             return { f: montarSeletor($('#sel-fixos', dlg), q.fixos) };
         });
     }
+    /** Dados da disciplina no portal da UFPel (só leitura; o plano de ensino já vem preenchido com eles). */
+    function htmlPortalDisc(q) {
+        const u = q.ufpel;
+        if (!u) return q.codigo ? '<p class="muted"><small>Sem dados do portal da UFPel para este código (ainda).</small></p>' : '';
+        const bloco = (rot, txt) => (txt ? `<h4 style="margin:.6rem 0 .2rem">${rot}</h4><div class="texto-portal">${esc(txt).replace(/\n/g, '<br>')}</div>` : '');
+        return `<details><summary style="cursor:pointer;font-weight:600;color:var(--teal)">Dados do portal da UFPel: ementa, objetivos, bibliografia${u.equivalentes.length ? ', equivalentes' : ''}</summary>
+            <p class="muted"><small>${u.cargaHoraria ? `${u.cargaHoraria} h · ` : ''}${u.creditos ? `${u.creditos} créditos · ` : ''}${esc(u.unidade || '')}${u.modalidade ? ` · ${esc(u.modalidade.toLowerCase())}` : ''} ·
+                <a href="https://institucional.ufpel.edu.br/disciplinas/cod/${esc(q.codigo)}" target="_blank" rel="noopener">abrir no portal ↗</a></small></p>
+            ${bloco('Ementa', u.ementa)}${bloco('Objetivos', u.objetivos)}${bloco('Conteúdo programático', u.conteudo)}${bloco('Bibliografia básica', u.bibliografiaBasica)}${bloco('Bibliografia complementar', u.bibliografiaComplementar)}
+            ${u.equivalentes.length ? `<h4 style="margin:.6rem 0 .2rem">Equivalentes (podem ser dadas juntas: um professor, um horário; a carga conta uma vez, a maior)</h4><ul>${u.equivalentes.map((e) => `<li>${esc(e.codigo)} ${esc(e.nome)}${e.horas ? ` — ${e.horas} h` : ''} <small class="muted">${esc(e.curso)}</small></li>`).join('')}</ul>` : ''}
+            <small class="muted">Os textos vão pré-preenchidos para o plano de ensino na área do professor.</small></details>`;
+    }
     const FORMS = { curso: formCurso, professor: formProfessor, sala: formSala, disciplina: formDisciplina };
 
     // ================================================================ listas de cadastro
     function renderLista(tipo) {
         const el = $(`#lista-${tipo}`);
         const acoes = (id) => `<td class="acoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="editar-item" data-tipo="${tipo}" data-id="${esc(id)}">Editar</button>
+            ${tipo === 'disciplina' ? `<button type="button" class="btn btn-secondary btn-sm" data-acao="nova-turma" data-id="${esc(id)}" title="Outra turma desta disciplina, com outro professor e outro horário">+ Turma</button>` : ''}
             <button type="button" class="btn btn-perigo btn-sm" data-acao="excluir-item" data-tipo="${tipo}" data-id="${esc(id)}" title="Excluir">×</button></td>`;
         const nomeP = (id) => N.nomeDe(D.professores, id);
         let html = '';
@@ -386,7 +407,7 @@
             const f = ($('#filtro-disc').value || '').toLowerCase();
             const lista = D.disciplinas.filter((q) => !f || [q.codigo, q.nome, N.nomesProfessores(D, q), ...q.ofertas.map((o) => N.nomeDe(D.cursos, o.curso))].join(' ').toLowerCase().includes(f));
             html = lista.length ? `<table class="lista"><thead><tr><th>Código</th><th>Disciplina</th><th>Professor</th><th>Aulas</th><th>Cursos</th><th>Salas</th><th>Restrições</th><th>Horários (código)</th><th></th></tr></thead><tbody>${lista.map((q) => `<tr>
-                <td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b></td><td>${q.professor ? esc(nomeP(q.professor)) : '<span style="color:var(--perigo)">sem responsável</span>'}${(q.regentes || []).length ? `<br><small>regentes: ${esc(q.regentes.map(nomeP).join(', '))}</small>` : ''}</td>
+                <td>${esc(q.codigo)}</td><td><b>${esc(q.nome)}</b>${q.turma ? ` <span class="etiqueta">${esc(q.turma)}</span>` : ''}${q.alunos !== null && q.alunos !== undefined ? `<br><small title="${q.alunosOrigem === 'ufpel' ? 'Matriculados na turma do portal da UFPel' : 'Digitado'}">${q.alunos} alunos${q.vagas ? ` / ${q.vagas} vagas` : ''}</small>` : ''}${q.ufpel && q.ufpel.ementa ? ' <small class="muted" title="Ementa, objetivos e bibliografia do portal">· ementa ✓</small>' : ''}</td><td>${q.professor ? esc(nomeP(q.professor)) : '<span style="color:var(--perigo)">sem responsável</span>'}${(q.regentes || []).length ? `<br><small>regentes: ${esc(q.regentes.map(nomeP).join(', '))}</small>` : ''}</td>
                 <td>${q.aulas ? `${q.aulas} <small title="${esc(q.divisao ? N.DIVISAO[q.divisao] : 'Padrão do curso')}">(${N.blocos(q, D.config.divisaoPadrao).join('+')})</small>` : '<span class="etiqueta" title="0 aulas ou semestre 0: fica fora da grade">fora da grade</span>'}${q.horas ? `<br><small title="Carga horária da matriz curricular">${q.creditos || '?'} cr. · ${q.horas} h</small>` : ''}</td>
                 <td>${q.ofertas.map((o) => { const c = D.cursos.find((x) => x.id === o.curso); const sit = N.situacao(o.semestre, D.config.metade);
                     return `<span class="etiqueta ${sit}" title="${esc(c ? c.nome : '')} — ${o.semestre}º semestre, ${N.CARATER[o.carater]}, ${sit}">${esc(c ? N.sigla(c.nome) : '?')} ${o.semestre}º ${N.CARATER[o.carater].slice(0, 3).toLowerCase()}.</span>`; }).join('') || '<small>—</small>'}</td>
@@ -769,14 +790,17 @@
     function sairAdmin() { ui.admin = false; try { sessionStorage.removeItem('gh_admin'); } catch (e) { /* ok */ } renderRelatorios(); }
     function htmlVerificacao() {
         const v = Planos.verificacao(D);
-        const nomes = { sala: 'Sala de aula', lab: 'Laboratório', aula: 'Aula (total)', preparo: 'Preparo de aula', pesquisa: 'Pesquisa', total: 'Total', disciplinas: 'Cadeiras' };
-        const tab = (b) => `<div class="tabela-wrap"><table class="lista"><thead><tr><th>Horas/semana por professor</th><th>n</th><th>Média</th><th>Desvio padrão</th><th>Mínimo</th><th>Máximo</th></tr></thead><tbody>
+        const nomes = { sala: 'Sala de aula (h)', lab: 'Laboratório (h)', aula: 'Aula — total (h)', preparo: 'Preparo de aula (h)', pesquisa: 'Pesquisa (h)', total: 'Total (h)', disciplinas: 'Cadeiras', turmas: 'Turmas', alunos: 'Alunos (total)', alunosTurma: 'Alunos por turma' };
+        const tab = (b) => `<div class="tabela-wrap"><table class="lista"><thead><tr><th>Por professor (semana)</th><th>n</th><th>Média</th><th>Desvio padrão</th><th>Mínimo</th><th>Máximo</th></tr></thead><tbody>
             ${Object.entries(nomes).map(([k, rot]) => { const e = b.estat[k]; return `<tr><td><b>${rot}</b></td><td>${e.n}</td><td>${e.media}</td><td>${e.desvio}</td><td>${e.min}</td><td>${e.max}</td></tr>`; }).join('')}</tbody></table></div>`;
         return `<div class="card"><div class="card-topo"><h2>Verificação interna — médias e desvios padrões</h2>
             <button type="button" class="btn btn-primary btn-sm" data-acao="verificacao-pdf">📄 Documento de verificação (PDF)</button></div>
             <div class="campos" style="max-width:520px"><label class="campo"><span>Horas de preparo por hora de aula</span><input type="number" step="0.1" min="0" id="fator-preparo" value="${v.fatorPreparo}">
             <small>Estimativa usada para "preparo de aula" (aqui e na área do professor).</small></label></div>
-            <div class="duas-colunas"><div><h3>Curso (${esc(D.cursos[0] ? D.cursos[0].nome : '')})</h3>${tab(v.curso)}</div><div><h3>Unidade (este curso + ${(D.externos || []).length} outro(s))</h3>${tab(v.unidade)}</div></div></div>`;
+            <div class="duas-colunas"><div><h3>Curso (${esc(D.cursos[0] ? D.cursos[0].nome : '')})</h3>${tab(v.curso)}</div><div><h3>Unidade (este curso + ${(D.externos || []).length} outro(s))</h3>${tab(v.unidade)}</div></div>
+            <p class="muted">Alunos = matriculados nas turmas (do portal da UFPel ou digitados na disciplina). Códigos equivalentes dados juntos contam uma turma (os alunos de todos somam) e a carga horária uma vez só, a maior.</p>
+            <div class="tabela-wrap"><table class="lista"><thead><tr><th>Professor</th><th>Turmas</th><th>Alunos</th><th>Alunos/turma</th><th>Aula (h)</th><th>Horas de aula por aluno</th></tr></thead><tbody>
+            ${v.curso.professores.map((p) => `<tr><td><b>${esc(p.nome)}</b></td><td>${p.turmas}</td><td>${p.alunos}</td><td>${p.alunosTurma}</td><td>${p.aula}</td><td>${p.horasPorAluno || '—'}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Sem aulas na grade.</td></tr>'}</tbody></table></div></div>`;
     }
     const barra = (pct, cor) => `<span class="barra-uso"><i style="width:${Math.min(100, pct)}%;background:${cor}"></i></span>`;
     function renderRelatorios() {
@@ -1058,7 +1082,7 @@
             <p class="muted">Horas por semana. Preparo = ${r.fatorPreparo} h por hora de aula (fator definido pela administração). Unidade = este curso + outros cursos da mesma unidade carregados (${(D.externos || []).length}).
             ${r.curso.posicao ? `Em horas de aula você é o ${r.curso.posicao}º de ${r.curso.de} no curso` : 'Você não tem aula neste curso'}${r.unidade.posicao ? ` e o ${r.unidade.posicao}º de ${r.unidade.de} na unidade` : ''}.</p>
             <div class="tabela-wrap"><table class="lista"><thead><tr><th></th><th>Você (curso)</th><th>Média do curso ± desvio</th><th>Você (unidade)</th><th>Média da unidade ± desvio</th><th></th></tr></thead><tbody>
-            ${linha('Cadeiras (disciplinas)', 'disciplinas', '')}${linha('Horas em sala de aula', 'sala', ' h')}${linha('Horas em laboratório', 'lab', ' h')}${linha('Horas de aula (total)', 'aula', ' h')}
+            ${linha('Cadeiras (disciplinas)', 'disciplinas', '')}${linha('Turmas', 'turmas', '')}${linha('Alunos (todas as turmas)', 'alunos', '')}${linha('Alunos por turma', 'alunosTurma', '')}${linha('Horas em sala de aula', 'sala', ' h')}${linha('Horas em laboratório', 'lab', ' h')}${linha('Horas de aula (total)', 'aula', ' h')}
             ${linha('Horas preparando aula', 'preparo', ' h')}${linha('Horas de pesquisa (reservadas)', 'pesquisa', ' h')}${linha('Total', 'total', ' h')}</tbody></table></div>
             <div class="legenda"><span><i style="background:var(--teal)"></i>você</span><span><i style="background:var(--verde)"></i>média do curso</span><span><i style="background:var(--limao)"></i>média da unidade</span></div></div>`;
     }
@@ -1236,9 +1260,12 @@
                 <p>${c.semestres} semestres · ${D.disciplinas.length} disciplinas cadastradas (${naGrade} vão para a grade) · oferta: ${resumoHorarios(c.oferta)} · reoferta: ${resumoHorarios(c.reoferta)}</p>
                 <p>Turnos preferidos: ${prefs.length ? prefs.sort((a, b) => a[0] - b[0]).map(([sem, v]) => `<span class="etiqueta">${sem}º: ${v.map((t) => N.NOME_TURNO[t]).join('/')}</span>`).join(' ') : '<small>nenhum (o gerador usa qualquer turno do funcionamento)</small>'}</p>
                 <div class="barra">${temMatriz ? `<button type="button" class="btn btn-primary btn-sm" data-acao="importar-matriz">📥 Importar disciplinas da matriz curricular</button>` : '<small class="muted">Este curso não tem a matriz no catálogo: cadastre as disciplinas à mão.</small>'}
+                <button type="button" class="btn btn-secondary btn-sm" data-acao="atualizar-ufpel">🔄 Atualizar com o portal da UFPel</button>
                 ${cat ? `<a class="btn btn-secondary btn-sm" href="${esc(cat.url)}" target="_blank" rel="noopener">↗ Página do curso na UFPel</a>` : ''}</div>
-                ${temMatriz ? `<small class="muted">A importação traz código, nome, semestre e créditos (aulas por semana = créditos). Estágio, TCC, EAD e extensão entram com 0 aulas (fora da grade);
-                    optativas entram com 0 aulas e semestre 0: quando forem ofertadas, informe semestre e aulas. Não repete disciplinas que já existem (pelo código). Depois, escolha o professor de cada uma.</small>` : ''}</div>`
+                <p id="status-ufpel">${htmlStatusUfpel()}</p>
+                ${temMatriz ? `<small class="muted">A importação traz código, nome, semestre, créditos e horas (aulas por semana = horas ÷ 15), e do portal da UFPel: as turmas do semestre anterior que atenderam este curso
+                    (uma disciplina por turma, com o professor responsável, os regentes e os alunos matriculados), ementa, objetivos, conteúdo e bibliografia. Estágio, TCC, EAD e extensão entram com 0 aulas (fora da grade);
+                    optativas entram com 0 aulas e semestre 0. Não repete disciplinas que já existem (pelo código). Professores podem ser trocados e turmas podem ser criadas em Disciplinas.</small>` : ''}</div>`
             : '<p class="vazio">Escolha a unidade e o curso acima.</p>'}`;
     }
     function usarCurso() {
@@ -1260,16 +1287,145 @@
         mudou();
         aviso(`Curso escolhido: ${esc(cat.nome)}.${cat.matriz ? ' Agora importe as disciplinas da matriz curricular.' : ''}`, 5000);
     }
-    function importarMatriz() {
+    // ================================================================ dados do portal institucional da UFPel (data/ufpel, atualizados todo dia pelo robô)
+    // O portal não deixa outro site lê-lo direto do navegador; o robô do GitHub lê e grava os arquivos junto do app.
+    const UF = { estado: 'nao', indice: null, cursos: null, disciplinas: null, turmas: {}, erro: '' };
+    async function lerJsonUf(caminho) { const r = await fetch(`data/ufpel/${caminho}`, { cache: 'no-cache' }); if (!r.ok) throw new Error(`${caminho}: HTTP ${r.status}`); return r.json(); }
+    async function carregarUfpel(forcar) {
+        if (UF.estado === 'carregando' || (UF.estado === 'ok' && !forcar)) return UF;
+        UF.estado = 'carregando';
+        try {
+            UF.indice = await lerJsonUf('indice.json');
+            [UF.cursos, UF.disciplinas] = await Promise.all([lerJsonUf('cursos.json'), lerJsonUf('disciplinas.json')]);
+            UF.turmas = {};
+            UF.estado = 'ok'; UF.erro = '';
+        } catch (e) { UF.estado = 'erro'; UF.erro = e.message; }
+        return UF;
+    }
+    async function turmasDoPeriodo(per) {
+        if (!per) return {};
+        if (!UF.turmas[per]) { try { UF.turmas[per] = (await lerJsonUf(`turmas/${per.replace('/', '-')}.json`)).turmas || {}; } catch (e) { UF.turmas[per] = {}; } }
+        return UF.turmas[per];
+    }
+    const periodoProfessores = () => (UF.indice ? N.escolherPeriodo(UF.indice.periodos, D.config.ano, D.config.metade) : '');
+    async function pacoteUfpel() {
+        await carregarUfpel();
+        if (UF.estado !== 'ok') return null;
+        const per = periodoProfessores();
+        return { disciplinas: UF.disciplinas.disciplinas || {}, turmas: await turmasDoPeriodo(per), periodo: per };
+    }
+    const dataBRhora = (iso) => { try { return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); } catch (e) { return iso; } };
+    function htmlStatusUfpel() {
+        if (UF.estado === 'carregando' || UF.estado === 'nao') return '<small class="muted">Carregando os dados do portal da UFPel…</small>';
+        if (UF.estado === 'erro') return `<small class="muted">Dados do portal da UFPel indisponíveis aqui (${esc(UF.erro)}). Abra o app pelo endereço publicado (GitHub Pages) para usar turmas, professores e ementas.</small>`;
+        const per = periodoProfessores(), ant = N.periodoAnterior(D.config.ano, D.config.metade);
+        return `<small class="muted">Portal da UFPel lido em ${esc(dataBRhora(UF.indice.atualizadoEm))} (atualiza todo dia). Professores e turmas de <b>${esc(per || '—')}</b>${per && per !== ant ? ` (o ${esc(ant)} ainda não está publicado)` : ''}.</small>`;
+    }
+    async function importarMatriz() {
         const c = D.cursos[0], cat = c && cursoCat(c.cod);
         if (!cat || !cat.matriz) return;
-        const novas = N.disciplinasDaMatriz(cat, c.id, D.disciplinas);
-        if (!novas.length) return aviso('Todas as disciplinas da matriz já estão cadastradas.');
+        const pac = await pacoteUfpel();
+        const restantes = N.disciplinasDaMatriz(cat, c.id, D.disciplinas);
+        if (!restantes.length) return aviso('Todas as disciplinas da matriz já estão cadastradas.');
         guardarHistorico();
-        D.disciplinas.push(...novas);
-        const comAula = novas.filter((q) => q.aulas > 0).length;
+        let msg;
+        if (pac) {
+            const r = N.importarDaUfpel(D, cat, c.id, pac);
+            msg = `${restantes.length} disciplinas da matriz importadas (${r.novas} registros, com as turmas). ${r.comTurma} tiveram turma para este curso em ${esc(pac.periodo)}: professores e alunos dessas turmas já vieram (${r.professoresNovos} professores novos). As outras ficam sem professor. Ementa, objetivos e bibliografia vieram do portal.`;
+        } else {
+            D.disciplinas.push(...restantes);
+            msg = `${restantes.length} disciplinas importadas da matriz (sem os dados do portal: ${esc(UF.erro || 'indisponíveis')}). Falta escolher os professores.`;
+        }
         mudou();
-        aviso(`${novas.length} disciplinas importadas: ${comAula} vão para a grade; ${novas.length - comAula} ficam com 0 aulas (optativas, estágio, TCC, EAD). Falta escolher os professores.`, 7000);
+        aviso(msg, 9000);
+    }
+    /** Atualiza ementa, objetivos, bibliografia e alunos das disciplinas com o portal (professores não mudam). */
+    async function atualizarComUfpel(silencioso) {
+        const pac = await pacoteUfpel();
+        if (!pac) { if (!silencioso) aviso(`Dados do portal indisponíveis: ${esc(UF.erro)}`); return; }
+        const n = N.atualizarDaUfpel(D, pac);
+        if (n) { salvarLocal(); renderTudo(); }
+        if (!silencioso) aviso(n ? `${n} atualizações do portal da UFPel aplicadas (ementas, objetivos, bibliografia, alunos).` : 'As disciplinas já estão com os dados mais novos do portal.');
+    }
+    // ================================================================ indicadores dos cursos (coordenação: o seu curso; administrador: todos)
+    function renderIndicadores() {
+        const el = $('#indicadores-conteudo');
+        if (!el) return;
+        if (!ehAdmin() && !ehCurso()) {
+            el.innerHTML = `<div class="card" style="max-width:560px"><h2>📊 Indicadores dos cursos</h2><p class="muted">A coordenação vê os dados do seu curso; o administrador vê todos os cursos.</p>
+                <button type="button" class="btn btn-primary" data-acao="entrar">Entrar</button></div>`;
+            return;
+        }
+        if (UF.estado !== 'ok') { el.innerHTML = `<div class="card"><h2>📊 Indicadores dos cursos</h2><p>${htmlStatusUfpel()}</p></div>`; if (UF.estado === 'nao') carregarUfpel().then(renderIndicadores); return; }
+        const per = (UF.indice.periodos || []).slice(-1)[0] || '';
+        if (!UF.turmas[per]) { el.innerHTML = '<div class="card"><p class="muted">Carregando as turmas…</p></div>'; turmasDoPeriodo(per).then(renderIndicadores); return; }
+        const tp = UF.turmas[per];
+        const ano = new Date().getFullYear();
+        const cat = (cod) => cursoCat(cod) || {};
+        const lista = Object.entries(UF.cursos.cursos || {}).map(([cod, info]) => Object.assign({ cod }, N.indicadoresCurso(info, tp, cat(cod).semestres, ano)));
+        const meu = D.cursos[0] && D.cursos[0].cod ? String(D.cursos[0].cod) : '';
+        const ver = ehAdmin() ? lista : lista.filter((x) => x.cod === meu);
+        const f1 = (x) => (x === null || x === undefined ? '—' : String(x).replace('.', ','));
+        const conc = (c) => Object.entries(c.conceitos || {}).map(([k, v]) => `<span class="etiqueta">${esc(k)} ${esc(v.valor)} <small>(${v.ano})</small></span>`).join(' ') || '—';
+        const barras = (obj, ult) => {
+            const ent = Object.entries(obj).sort((a, b) => a[0].localeCompare(b[0])).slice(-ult);
+            const mx = Math.max(1, ...ent.map((e) => e[1]));
+            return ent.length ? `<div class="mini-barras">${ent.map(([k, v]) => `<div title="${esc(k)}: ${v}"><i style="height:${Math.round(100 * v / mx)}%"></i><b>${v}</b><small>${esc(String(k).replace(/\/1$/, '').replace(/^20/, "'"))}</small></div>`).join('')}</div>` : '<p class="vazio">—</p>';
+        };
+        const profsCurso = (nome) => {
+            const meuN = N.cursoDaTurma(nome), m = {};
+            Object.entries(tp).forEach(([cod, ts]) => ts.forEach((t) => {
+                if (!(t.cursos || []).some((c) => N.cursoDaTurma(c) === meuN)) return;
+                (t.professores || []).forEach((p) => { const k = N.normNome(p.nome); const x = (m[k] = m[k] || { nome: N.nomePessoa(p.nome), turmas: 0, alunos: 0, cods: new Set() }); x.turmas++; x.alunos += Number(t.matriculados) || 0; x.cods.add(cod); });
+            }));
+            return Object.values(m).sort((a, b) => b.alunos - a.alunos);
+        };
+        const detalhe = (c) => {
+            const ps = profsCurso(c.nome);
+            return `<div class="card" id="ind-${esc(c.cod)}"><div class="card-topo"><h2>${esc(c.nome)} <small>código ${esc(c.cod)}</small></h2><a class="btn btn-secondary btn-sm" href="https://institucional.ufpel.edu.br/cursos/cod/${esc(c.cod)}" target="_blank" rel="noopener">↗ Portal</a></div>
+                <p>Coordenação: <b>${esc(N.nomePessoa(c.coordenador || '') || '—')}</b> · Conceitos: ${conc(c)} · Vagas anuais: <b>${c.vagas || '—'}</b>${c.vagasDetalhe.length ? ` <small class="muted">(${c.vagasDetalhe.map((v) => `${esc(v.forma)}: ${v.total}`).join('; ')})</small>` : ''}</p>
+                <div class="kpis">
+                    <div><b>${c.ativos}</b><span>alunos ativos</span></div><div><b>${c.egressos}</b><span>egressos (total)</span></div>
+                    <div><b>${f1(c.evasaoMedia)}${c.evasaoMedia === null ? '' : '%'}</b><span>evasão estimada*</span></div>
+                    <div><b>${c.turmas}</b><span>turmas em ${esc(per)}</span></div><div><b>${f1(c.alunosPorTurma)}</b><span>alunos por turma</span></div>
+                    <div><b>${f1(c.alunosPorProfessor)}</b><span>alunos por professor</span></div><div><b>${c.professoresPeriodo}</b><span>professores em ${esc(per)}</span></div>
+                    <div><b>${c.professoresTres}</b><span>professores (últimos 3 sem.)</span></div></div>
+                <div class="duas-colunas"><div><h3>Alunos ativos por ano de ingresso</h3>${barras(c.ativosPorAno, 12)}</div><div><h3>Egressos por ano de conclusão</h3>${barras(c.egressosPorAno, 12)}</div></div>
+                <h3>Coortes (estimativa de evasão)</h3><div class="tabela-wrap"><table class="lista"><thead><tr><th>Ingresso</th><th>Ainda ativos</th><th>Formados</th><th>Vagas (atuais)</th><th>Evasão estimada</th></tr></thead><tbody>
+                ${c.coortes.map((k) => `<tr><td>${k.ano}</td><td>${k.ativos}</td><td>${k.formados}</td><td>${k.vagas || '—'}</td><td>${k.evasao === null ? '—' : f1(k.evasao) + '%'}</td></tr>`).join('')}</tbody></table></div>
+                <h3>Professores das turmas deste curso em ${esc(per)}</h3><div class="tabela-wrap"><table class="lista"><thead><tr><th>Professor</th><th>Turmas</th><th>Alunos</th><th>Alunos/turma</th><th>Disciplinas</th></tr></thead><tbody>
+                ${ps.map((p) => `<tr><td><b>${esc(p.nome)}</b></td><td>${p.turmas}</td><td>${p.alunos}</td><td>${f1(Math.round(10 * p.alunos / p.turmas) / 10)}</td><td><small>${esc([...p.cods].join(', '))}</small></td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhuma turma publicada para este curso.</td></tr>'}</tbody></table></div></div>`;
+        };
+        const tot = (k) => ver.reduce((s, c) => s + (Number(c[k]) || 0), 0);
+        el.innerHTML = `<div class="card"><div class="card-topo"><h2>📊 Indicadores ${ehAdmin() ? 'de todos os cursos' : 'do curso'}</h2>
+            <button type="button" class="btn btn-secondary btn-sm" data-acao="atualizar-ufpel">🔄 Recarregar</button></div>
+            <p>${htmlStatusUfpel()}</p>
+            <p class="muted"><small>* O portal não publica a evasão. Estimativa por coorte já formável (ingresso há mais tempo que a duração do curso): 1 − (ainda ativos + formados) ÷ vagas anuais atuais.
+                Vagas antigas podem ter sido outras; use como indicador de tendência, não como número oficial. Nomes de alunos não são guardados, só as contagens.</small></p>
+            ${ehAdmin() ? `<div class="tabela-wrap"><table class="lista"><thead><tr><th>Curso</th><th>Coordenação</th><th>Ativos</th><th>Egressos</th><th>Vagas/ano</th><th>Evasão est.</th><th>Turmas</th><th>Alunos/turma</th><th>Alunos/professor</th><th>Conceitos</th></tr></thead><tbody>
+                ${ver.map((c) => `<tr><td><a role="button" tabindex="0" style="cursor:pointer" data-acao="ancora" data-id="ind-${esc(c.cod)}"><b>${esc(c.nome)}</b></a></td><td><small>${esc(N.nomePessoa(c.coordenador || ''))}</small></td><td>${c.ativos}</td><td>${c.egressos}</td><td>${c.vagas || '—'}</td>
+                    <td>${c.evasaoMedia === null ? '—' : f1(c.evasaoMedia) + '%'}</td><td>${c.turmas}</td><td>${f1(c.alunosPorTurma)}</td><td>${f1(c.alunosPorProfessor)}</td><td>${conc(c)}</td></tr>`).join('')}
+                <tr><td><b>Unidade (total)</b></td><td></td><td><b>${tot('ativos')}</b></td><td><b>${tot('egressos')}</b></td><td><b>${tot('vagas')}</b></td><td></td><td><b>${tot('turmas')}</b></td>
+                    <td>${f1(tot('turmas') ? Math.round(10 * tot('alunosTurmas') / tot('turmas')) / 10 : 0)}</td><td></td><td></td></tr></tbody></table></div>
+                <small class="muted">Turmas que atendem mais de um curso aparecem em cada um deles.</small>` : ''}</div>
+            ${ver.length ? ver.map(detalhe).join('') : `<div class="card"><p class="vazio">Sem dados do portal para ${esc(D.cursos[0] ? D.cursos[0].nome : 'o curso')}.</p></div>`}`;
+    }
+
+    /** Nova turma da mesma disciplina (outro professor e outro horário). */
+    function novaTurma(id) {
+        const q = D.disciplinas.find((x) => x.id === id);
+        if (!q) return;
+        guardarHistorico();
+        const irmas = D.disciplinas.filter((x) => x.codigo && x.codigo === q.codigo && x.nome === q.nome);
+        if (!q.turma) q.turma = 'T1';
+        const usados = new Set(irmas.map((x) => x.turma));
+        let n = 2; while (usados.has(`T${n}`)) n++;
+        const nova = JSON.parse(JSON.stringify(q));
+        Object.assign(nova, { id: N.novoId('d'), turma: `T${n}`, professor: '', regentes: [], fixos: [], equivalentes: [], alunos: null, alunosOrigem: '', turmaUfpel: '' });
+        D.disciplinas.splice(D.disciplinas.indexOf(q) + 1, 0, nova);
+        mudou();
+        aviso(`${esc(N.nomeDisc(nova))} criada: escolha o professor. As turmas da mesma disciplina podem ficar no mesmo horário (o aluno faz uma delas), mas não com o mesmo professor.`, 6000);
+        FORMS.disciplina(nova.id);
     }
 
     // ================================================================ outros cursos
@@ -1488,6 +1644,9 @@
                 case 'tirar-outro': guardarHistorico(); D.externos.splice(Number(alvo.dataset.i), 1); mudou(); break;
                 case 'usar-curso': usarCurso(); break;
                 case 'importar-matriz': importarMatriz(); break;
+                case 'atualizar-ufpel': carregarUfpel(true).then(() => atualizarComUfpel(false)); break;
+                case 'nova-turma': novaTurma(id); break;
+                case 'ancora': { const alvo = document.getElementById(id); if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }); break; }
                 case 'novo':
                     if (confirm('Começar a grade de um curso do zero? Os dados atuais saem deste navegador (salve no MEGA ou exporte antes, se quiser guardar).')) { guardarHistorico(); D = N.dadosVazios(); ui.item = null; mudou(); location.hash = '#cursos'; }
                     break;
@@ -1592,4 +1751,6 @@
     window.GeradorApp = { dados: () => D, ui, aleatorizar, soltarEm, selecionar, irPara, podeEditarAloc: (i) => podeEditarAloc(i) };
 
     irPara(location.hash.slice(1) || 'inicio');
+    // dados do portal: carrega em segundo plano e atualiza ementas e alunos sem avisar
+    carregarUfpel().then(() => { const s = $('#status-ufpel'); if (s) s.innerHTML = htmlStatusUfpel(); if (UF.estado === 'ok' && D.disciplinas.some((q) => q.codigo)) atualizarComUfpel(true); if (ui.pagina === 'indicadores') renderIndicadores(); });
 })();

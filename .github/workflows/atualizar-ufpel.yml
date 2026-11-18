@@ -12,7 +12,7 @@ concurrency:
 jobs:
   atualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,6 +20,8 @@ jobs:
           node-version: '20'
       - run: npm install --no-save --no-package-lock linkedom@0.18
       - run: node tools/atualizar-ufpel.mjs
+        env:
+          ORCAMENTO_MIN: '55'
       - name: Gravar se mudou
         run: |
           git config user.name "atualizador-ufpel"

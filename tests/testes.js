@@ -702,6 +702,151 @@ teste('Arquivo: normalizar completa campos faltando', () => {
     ok(Array.isArray(d.grade.alocacoes));
 });
 
+// ================================================================ portal da UFPel: turmas, professores, alunos, equivalentes
+const PL = require('../js/planos.js');
+const C_UF = require('../js/matrizes.js');
+/** Pacote como o app monta a partir de data/ufpel (2 turmas de Cálculo A para a EA, uma para outro curso). */
+const pacoteUf = () => ({
+    periodo: '2026/2',
+    disciplinas: {
+        '15000768': { codigo: '15000768', nome: 'CÁLCULO A', cargaHoraria: 90, creditos: 6, unidade: 'Centro de Engenharias', ementa: 'Funções de uma variável.',
+            objetivos: 'Objetivo Geral:\nObjetivo geral:\nCompreender o cálculo.\nObjetivos Específicos:\nDerivar.', conteudo: '', bibliografiaBasica: 'ANTON, H. Cálculo.', bibliografiaComplementar: 'STEWART, J.',
+            equivalentes: [{ codigo: '15000341', nome: 'CÁLCULO A', curso: 'Engenharia de Petróleo (Bacharelado)', horas: 90 }], lidoEm: 'x' },
+        '22000294': { codigo: '22000294', nome: 'ALGORITMOS E PROGRAMAÇÃO', cargaHoraria: 60, creditos: 4, ementa: 'Algoritmos.', objetivos: '', equivalentes: [] }
+    },
+    turmas: {
+        '15000768': [
+            { turma: 'T1', periodo: '2026/2', vagas: 50, matriculados: 48, cursos: ['Engenharia de Produção (Bacharelado - Noturno)'], professores: [{ nome: 'KARINE VON AHN PINTO', responsavel: true }] },
+            { turma: 'T2', periodo: '2026/2', vagas: 45, matriculados: 40, cursos: ['Engenharia Agrícola (Bacharelado)'], professores: [{ nome: 'RUTH DA SILVA BRUM', responsavel: true }, { nome: 'ADAMO DE SOUSA ARAÚJO', responsavel: false }] },
+            { turma: 'T3', periodo: '2026/2', vagas: 50, matriculados: 26, cursos: ['Engenharia Agrícola (Bacharelado)', 'Engenharia Civil (Bacharelado)'], professores: [{ nome: 'DANIELA DALLA CHIESA', responsavel: true }] }
+        ]
+    }
+});
+const cursoEA = () => { const d = N.dadosVazios(); const cat = C_UF.unidades[0].cursos.find((c) => c.cod === 700); d.cursos = [{ id: 'ea', cod: 700, nome: cat.nome, semestres: 10 }]; return { d: N.normalizar(d), cat }; };
+
+teste('Período dos professores: o anterior ao planejado; sem ele, o mais recente antes', () => {
+    igual(N.periodoAnterior(2027, 1), '2026/2');
+    igual(N.periodoAnterior(2027, 2), '2027/1');
+    igual(N.escolherPeriodo(['2026/1', '2026/2'], 2027, 1), '2026/2');
+    igual(N.escolherPeriodo(['2026/2'], 2027, 2), '2026/2', '2027/1 ainda não publicado');
+    igual(N.nomePessoa('ADAMO DE SOUSA ARAÚJO'), 'Adamo de Sousa Araújo');
+});
+
+teste('Importar do portal: uma disciplina por turma do curso, com responsável, regentes, alunos e ementa', () => {
+    const { d, cat } = cursoEA();
+    const r = N.importarDaUfpel(d, cat, 'ea', pacoteUf());
+    const calc = d.disciplinas.filter((q) => q.codigo === '15000768');
+    igual(calc.map((q) => [q.turma, q.alunos, N.nomeDe(d.professores, q.professor), q.regentes.map((p) => N.nomeDe(d.professores, p))]),
+        [['T2', 40, 'Ruth da Silva Brum', ['Adamo de Sousa Araújo']], ['T3', 26, 'Daniela Dalla Chiesa', []]], 'só as turmas da EA (T1 é da Produção)');
+    igual(calc[0].ufpel.ementa, 'Funções de uma variável.');
+    igual(calc[0].ufpel.equivalentes[0].codigo, '15000341');
+    igual(calc[0].aulas, 6, 'aulas pela carga horária real');
+    const alg = d.disciplinas.find((q) => q.codigo === '22000294');
+    igual([alg.professor, alg.turma, alg.ufpel.ementa], ['', '', 'Algoritmos.'], 'sem turma: sem professor, mas com ementa');
+    igual([r.comTurma, r.professoresNovos], [1, 3]);
+    igual(N.importarDaUfpel(d, cat, 'ea', pacoteUf()).novas, 0, 'não repete');
+    const n2 = N.normalizar(JSON.parse(JSON.stringify(d)));
+    igual([n2.disciplinas.find((q) => q.id === calc[0].id).turma, n2.disciplinas.find((q) => q.id === calc[0].id).alunos], ['T2', 40], 'normalizar guarda turma e alunos');
+});
+
+teste('Plano de ensino vem com ementa, objetivos (geral e específicos), bibliografia e turma do portal', () => {
+    const { d, cat } = cursoEA();
+    N.importarDaUfpel(d, cat, 'ea', pacoteUf());
+    const q = d.disciplinas.find((x) => x.codigo === '15000768');
+    const c = PL.conteudoPadrao(d, q);
+    igual([c.ementa, c.objetivoGeral, c.objetivosEspecificos, c.bibliografiaBasica, c.turma], ['Funções de uma variável.', 'Compreender o cálculo.', 'Derivar.', 'ANTON, H. Cálculo.', 'T2']);
+});
+
+teste('Atualizar do portal: ementa e alunos mudam; alunos digitados à mão e professores não', () => {
+    const { d, cat } = cursoEA();
+    N.importarDaUfpel(d, cat, 'ea', pacoteUf());
+    const [t2, t3] = d.disciplinas.filter((q) => q.codigo === '15000768');
+    t3.alunos = 30; t3.alunosOrigem = 'manual'; t2.professor = 'outro';
+    const pac = pacoteUf();
+    pac.disciplinas['15000768'].ementa = 'Nova ementa.';
+    pac.turmas['15000768'][1].matriculados = 44; pac.turmas['15000768'][2].matriculados = 10;
+    ok(N.atualizarDaUfpel(d, pac) > 0);
+    igual([t2.ufpel.ementa, t2.alunos, t3.alunos, t2.professor], ['Nova ementa.', 44, 30, 'outro']);
+});
+
+teste('Turmas da mesma disciplina (T1, T2) podem coincidir no semestre; com o mesmo professor é erro', () => {
+    const { d, cat } = cursoEA();
+    N.importarDaUfpel(d, cat, 'ea', pacoteUf());
+    d.salas = [{ id: 's1', nome: 'S1', tipo: 'sala' }, { id: 's2', nome: 'S2', tipo: 'sala' }];
+    const [t2, t3] = d.disciplinas.filter((q) => q.codigo === '15000768');
+    d.grade.alocacoes = [{ disc: t2.id, d: 0, h: 0, sala: 's1' }, { disc: t3.id, d: 0, h: 0, sala: 's2' }];
+    igual(tipos(d).filter((x) => x === 'turma' || x === 'prof'), [], 'outra turma no mesmo horário: ok');
+    t3.professor = t2.professor;
+    ok(N.conflitos(d).lista.some((c) => c.tipo === 'prof' && c.gravidade === 'erro'));
+});
+
+teste('Gerador: duas turmas da mesma disciplina no mesmo semestre entram; outras disciplinas do semestre não colidem com elas', () => {
+    const d = N.dadosVazios();
+    d.cursos = [{ id: 'c', nome: 'Curso', semestres: 2 }];
+    d.professores = [{ id: 'a', nome: 'A' }, { id: 'b', nome: 'B' }, { id: 'c2', nome: 'C' }];
+    d.salas = [{ id: 's1', nome: 'S1' }, { id: 's2', nome: 'S2' }];
+    const of = [{ curso: 'c', semestre: 1, carater: 'obrigatoria' }];
+    d.disciplinas = [{ id: 'x1', codigo: '1', nome: 'X', turma: 'T1', professor: 'a', aulas: 4, ofertas: of }, { id: 'x2', codigo: '1', nome: 'X', turma: 'T2', professor: 'b', aulas: 4, ofertas: of },
+        { id: 'y', codigo: '2', nome: 'Y', professor: 'c2', aulas: 4, ofertas: of }];
+    const dd = N.normalizar(d);
+    const r = N.gerar(dd, { semente: 3 });
+    dd.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+    igual(r.naoAlocadas.length, 0);
+    igual(N.conflitos(dd).erros, 0);
+    const k = (id) => new Set(r.alocacoes.filter((a) => a.disc === id).map((a) => `${a.d}|${a.h}`));
+    const y = k('y');
+    ok(![...k('x1'), ...k('x2')].some((s) => y.has(s)), 'Y não pode coincidir com nenhuma turma de X');
+});
+
+teste('Equivalentes dados juntos: carga diferente = aviso leve; a carga do professor conta uma vez (a maior); alunos somam numa turma', () => {
+    const d = N.dadosVazios();
+    d.cursos = [{ id: 'c', nome: 'Curso', semestres: 4 }];
+    d.professores = [{ id: 'p', nome: 'Prof' }];
+    d.salas = [{ id: 's', nome: 'S' }];
+    d.disciplinas = [{ id: 'a', codigo: 'A1', nome: 'Hidráulica', professor: 'p', aulas: 4, horas: 60, alunos: 20, equivalentes: ['b'], ofertas: [{ curso: 'c', semestre: 3 }] },
+        { id: 'b', codigo: 'B9', nome: 'Hidráulica Aplicada', professor: 'p', aulas: 3, horas: 45, alunos: 12, equivalentes: ['a'], ofertas: [{ curso: 'c', semestre: 3 }] }];
+    const dd = N.normalizar(d);
+    const r = N.gerar(dd, { semente: 1 });
+    dd.grade = { alocacoes: r.alocacoes, naoAlocadas: r.naoAlocadas, geradaEm: 't' };
+    igual(new Set(r.alocacoes.map((x) => `${x.d}|${x.h}`)).size, 4, 'o grupo ocupa as 4 aulas da maior');
+    const c = N.conflitos(dd);
+    igual([c.erros, c.lista.filter((x) => x.tipo === 'equiv-ch').map((x) => x.gravidade)], [0, ['leve']]);
+    const h = PL.horasProfessores(dd, 'curso')[0];
+    igual([h.aula, h.turmas, h.alunos, h.alunosTurma], [Math.round(4 * 50 / 60 * 100) / 100, 1, 32, 32]);
+    const raad = PL.turmasDoSemestre(dd, 'Prof', {});
+    igual([raad.length, raad[0].codigo], [1, 'A1 / B9'], 'RAAD: uma turma, os dois códigos');
+});
+
+teste('Verificação: médias e desvios de turmas, alunos e alunos por turma', () => {
+    const v = PL.verificacao(comGrade(1));
+    ['turmas', 'alunos', 'alunosTurma'].forEach((k) => ok(v.curso.estat[k] && 'media' in v.curso.estat[k], k));
+});
+
+teste('Indicadores do curso: ativos, egressos, evasão estimada por coorte, alunos por turma e por professor', () => {
+    const info = { nome: 'Engenharia Agrícola', coordenador: 'X', vagasTotal: 40, conceitos: { CC: { ano: 2023, valor: '4' } },
+        alunos: { total: 6, porIngresso: { '2019/1': 2, '2026/1': 4 } }, egressos: { total: 30, porConclusao: { 2025: 30 }, porIngresso: { 2019: 18, 2018: 30 } }, professores: [{}, {}] };
+    const turmas = pacoteUf().turmas;
+    const r = N.indicadoresCurso(info, turmas, 10, 2026);
+    const c19 = r.coortes.find((k) => k.ano === 2019);
+    igual([c19.ativos, c19.formados, c19.evasao], [2, 18, 50]);
+    igual([r.turmas, r.alunosTurmas, r.alunosPorTurma, r.professoresPeriodo, r.alunosPorProfessor], [2, 66, 33, 3, 22]);
+    igual(r.coortes.find((k) => k.ano === 2018).evasao, 25);
+});
+
+teste('Leitor do portal: disciplina e curso (estrutura real das páginas)', () => {
+    let parseHTML;
+    try { ({ parseHTML } = require('linkedom')); } catch (e) { console.log('      (linkedom não instalado: leitor testado no robô e no navegador)'); return; }
+    const L = require('../js/ufpel-leitor.js'), fs = require('fs');
+    const d = L.disciplina(parseHTML(fs.readFileSync(path.join(__dirname, 'fixtures', 'disciplina.html'), 'utf8')).document);
+    igual([d.codigo, d.cargaHoraria, d.creditos, d.turmas.length, d.turmas[0].matriculados, d.turmas[1].professores.map((p) => p.responsavel)], ['15000768', 90, 6, 2, 48, [true, false]]);
+    igual(d.turmas[0].horarios[0], { dia: 1, ini: '20:40', fim: '21:30' });
+    igual([d.bibliografiaBasica, d.equivalentes[0].id], ['ANTON, H. Cálculo. Bookman, 2014.', '27434']);
+    const c = L.curso(parseHTML(fs.readFileSync(path.join(__dirname, 'fixtures', 'curso.html'), 'utf8')).document);
+    igual([c.codigo, c.coordenador, c.vagasTotal, c.alunos.total, c.alunos.porIngresso, c.egressos.porConclusao, c.matriz.length, c.conceitos.CC.valor],
+        [700, 'ADAMO DE SOUSA ARAÚJO', 42, 3, { '2026/1': 2, '2024/1': 1 }, { 2025: 1, 2026: 1 }, 3, '4']);
+    ok(!JSON.stringify(c).includes('ALUNO UM'), 'nome de aluno não pode ser guardado');
+});
+
 teste('PDF: gera com o exemplo (capa, grades, disciplinas, conflitos)', () => {
     global.Nucleo = N;
     global.LOGOS_PDF = require('vm').runInNewContext(require('fs').readFileSync(path.join(__dirname, '../js/logos.js'), 'utf8') + ';LOGOS_PDF');

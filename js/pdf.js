@@ -352,20 +352,20 @@ const GeradorPDF = (() => {
             doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...CINZA); doc.text(txt(sub), W - 10, 17.5, { align: 'right' });
             doc.setDrawColor(168, 225, 86); doc.setLineWidth(0.8); doc.line(10, 21.5, W - 10, 21.5); doc.setTextColor(0, 0, 0);
         };
-        const nomes = { sala: 'Sala de aula', lab: 'Laboratório', aula: 'Aula (total)', preparo: 'Preparo de aula', pesquisa: 'Pesquisa (reservada)', total: 'Total', disciplinas: 'Cadeiras (nº)' };
+        const nomes = { sala: 'Sala de aula (h)', lab: 'Laboratório (h)', aula: 'Aula — total (h)', preparo: 'Preparo de aula (h)', pesquisa: 'Pesquisa reservada (h)', total: 'Total (h)', disciplinas: 'Cadeiras (nº)', turmas: 'Turmas (nº)', alunos: 'Alunos (total)', alunosTurma: 'Alunos por turma' };
         const fmt = (x) => String(x).replace('.', ',');
         const bloco = (titulo, b, primeiro) => {
             if (!primeiro) doc.addPage();
             topo(`Verificação interna — ${titulo}`, `Uso interno — ${(cfg.unidade || {}).nome || ''} — ${cfg.ano}/${cfg.metade} — preparo = ${fmt(v.fatorPreparo)} h por hora de aula`);
             doc.setFontSize(8.5);
             doc.text(doc.splitTextToSize(txt('Horas por semana de cada professor nesta grade' + (titulo.startsWith('Unidade') ? ' e nos outros cursos da mesma unidade carregados (turma conjunta conta uma vez)' : '') + '. Desvio padrão amostral. Laboratório = aula em sala cadastrada como laboratório (ou com nome iniciado por "Lab").'), W - 20), 10, 27);
-            doc.autoTable({ startY: 33, margin: { left: 10, right: 10, bottom: 12 }, head: [['Horas/semana', 'n', 'Média', 'Desvio padrão', 'Mínimo', 'Máximo']],
+            doc.autoTable({ startY: 33, margin: { left: 10, right: 10, bottom: 12 }, head: [['Por professor (semana)', 'n', 'Média', 'Desvio padrão', 'Mínimo', 'Máximo']],
                 body: Object.entries(nomes).map(([k, rot]) => { const e = b.estat[k]; return [rot, e.n, fmt(e.media), fmt(e.desvio), fmt(e.min), fmt(e.max)].map(txt); }),
                 theme: 'grid', headStyles: { fillColor: VERDE }, styles: { fontSize: 9 }, columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' } } });
             const m = b.estat.total;
             doc.autoTable({ startY: doc.lastAutoTable.finalY + 6, margin: { left: 10, right: 10, bottom: 12 },
-                head: [['Professor', 'Cadeiras', 'Sala (h)', 'Laboratório (h)', 'Aula (h)', 'Preparo (h)', 'Pesquisa (h)', 'Total (h)', 'Desvio do total (z)', 'Cursos']],
-                body: b.professores.map((p) => [p.nome, p.disciplinas, fmt(p.sala), fmt(p.lab), fmt(p.aula), fmt(p.preparo), fmt(p.pesquisa), fmt(p.total), m.desvio ? fmt(Math.round((p.total - m.media) / m.desvio * 100) / 100) : '—', p.cursos.join(', ')].map(txt)),
+                head: [['Professor', 'Cadeiras', 'Turmas', 'Alunos', 'Alunos/turma', 'Sala (h)', 'Laboratório (h)', 'Aula (h)', 'Preparo (h)', 'Pesquisa (h)', 'Total (h)', 'Desvio do total (z)', 'Cursos']],
+                body: b.professores.map((p) => [p.nome, p.disciplinas, p.turmas, p.alunos, fmt(p.alunosTurma), fmt(p.sala), fmt(p.lab), fmt(p.aula), fmt(p.preparo), fmt(p.pesquisa), fmt(p.total), m.desvio ? fmt(Math.round((p.total - m.media) / m.desvio * 100) / 100) : '—', p.cursos.join(', ')].map(txt)),
                 theme: 'grid', headStyles: { fillColor: VERDE, fontSize: 8 }, styles: { fontSize: 8 },
                 didParseCell: (h) => { if (h.section !== 'body' || !m.desvio) return; const p = b.professores[h.row.index]; const z = (p.total - m.media) / m.desvio; if (z >= 1) h.cell.styles.fillColor = AMARELO_CLARO; if (z <= -1) h.cell.styles.fillColor = [232, 243, 250]; } });
             doc.setFontSize(7.5); doc.setTextColor(...CINZA);
