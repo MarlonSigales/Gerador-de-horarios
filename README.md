@@ -21,6 +21,8 @@ Organiza os horários dos professores nas salas de aula e nos laboratórios, **u
 - `js/nucleo.js` — regras, conflitos, gerador, outros cursos, matriz (sem tela; testado no Node).
 - `js/app.js` — interface. `js/pdf.js` — PDF. `js/nuvem.js` — MEGA. `js/exemplo.js` — exemplo.
 - `js/planos.js` — rendimento, verificação interna, plano de ensino, RAAD, dados individuais e da unidade (sem tela). `js/docx-docs.js` — DOCX.
+- `js/ufpel-leitor.js` — leitor das páginas públicas do portal institucional (cursos e disciplinas; só contagens de alunos).
+- `tools/atualizar-ufpel.mjs` + `.github/workflows/atualizar-ufpel.yml` — robô diário que grava `data/ufpel/` (turmas, professores, ementas, alunos, egressos).
 - `js/matrizes.js` — catálogo UFPel (gerado de `tools/matrizes-ceng.txt` por `tools/gerar_matrizes_js.py`).
 - `tests/testes.js` — `node tests/testes.js`. `todoQA.txt` — diretrizes, feito, falta e QA.
 

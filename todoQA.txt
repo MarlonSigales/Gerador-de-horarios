@@ -140,6 +140,26 @@ Atualizado em 17/11/2026 (versão 1). Os números são fixos (servem de referên
 53 [rejeitado 17/11/2026] Industrialização da Madeira e Sustentabilidade (8700): página dá 404 no portal; retirado do
    catálogo a pedido do usuário.
 
+54 [resolvido 17/11/2026] Dados do portal institucional da UFPel no app: ao importar a matriz, cada disciplina vem com as
+   turmas do semestre anterior que atenderam o curso (uma disciplina por turma: professor responsável, regentes, alunos
+   matriculados, vagas) e com ementa, objetivos, conteúdo, bibliografia e equivalentes (aparecem no cadastro e já
+   preenchem o plano de ensino). Sem turma no período: sem professor. Professores podem ser trocados; "+ Turma" cria
+   outra turma (outro professor, outro horário). Turmas da mesma disciplina podem coincidir no semestre (o aluno faz uma).
+55 [resolvido 17/11/2026] Códigos equivalentes dados juntos (um professor, um horário, nomes diferentes): carga horária
+   diferente = aviso leve; a carga conta uma vez só, a maior (gerador, horas do professor, RAAD com os códigos juntos).
+56 [resolvido 17/11/2026] Indicadores dos cursos (página nova): coordenação vê o seu curso; administrador vê todos e o
+   total da unidade. Coordenador, conceitos, vagas, alunos ativos por ano de ingresso, egressos por ano, evasão estimada
+   por coorte (o portal não publica evasão: 1 − (ativos + formados) ÷ vagas atuais), turmas, alunos por turma e por
+   professor, professores do período. Nomes de alunos nunca são guardados.
+57 [resolvido 17/11/2026] Verificação interna e área do professor com turmas, alunos e alunos por turma (médias e desvios).
+58 [resolvido 17/11/2026] Atualização automática: o portal bloqueia leitura direta pelo navegador (CORS), então um robô
+   do GitHub (Actions, todo dia 03:17) lê o portal e grava data/ufpel/; o app lê esses arquivos e atualiza sozinho
+   ementas e alunos (professores não mudam sem o curso querer). O portal bloqueia pedidos rápidos (HTTP 403): o robô lê
+   uma página por vez, espera quando é bloqueado e completa aos poucos (primeiro o que está mais velho). As turmas de cada
+   período ficam guardadas: é daí que sai o "semestre anterior" (hoje o portal só mostra o período atual, 2026/2).
+59 [fazer] Conferir no Actions que a coleta completa (cerca de 540 disciplinas) termina sem bloqueios; se o portal
+   continuar bloqueando, aumentar PAUSA_MS no workflow.
+
 === O QUE FALTA
 20 [resolvido 16/11/2026] Tarde com intervalo 16:00–16:20: 13:30–14:20, 14:20–15:10, 15:10–16:00, 16:20–17:10, 17:10–18:00
    e, a pedido do usuário, 6º período 18:00–18:50 (código x26). Turno da tarde vai até 18:30 (início); um bloco nunca
